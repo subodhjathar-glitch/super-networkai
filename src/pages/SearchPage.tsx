@@ -109,9 +109,14 @@ const SearchPage = () => {
             </div>
             <span className="font-display font-bold text-lg text-foreground">SuperNetworkAI</span>
           </button>
-          <Button variant="outline" size="sm" onClick={() => navigate("/connections")}>
-            Connections
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => navigate("/onboarding")}>
+              Edit Profile
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate("/connections")}>
+              Connections
+            </Button>
+          </div>
         </div>
       </nav>
 

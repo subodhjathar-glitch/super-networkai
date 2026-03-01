@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
 import IdentityStep from "@/components/onboarding/IdentityStep";
 import type { ProfileData } from "@/components/onboarding/ProfileStep";
 import ProfileStep from "@/components/onboarding/ProfileStep";
@@ -21,6 +22,7 @@ const STEPS = ["Identity", "Profile", "Ikigai", "Assessment"];
 const Onboarding = () => {
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [initializing, setInitializing] = useState(true);
   const { user } = useAuth();
   const [data, setData] = useState<{
     identity: string;
@@ -47,6 +49,81 @@ const Onboarding = () => {
   const updateData = (partial: Partial<typeof data>) => {
     setData((prev) => ({ ...prev, ...partial }));
   };
+
+  useEffect(() => {
+    if (!user) {
+      setInitializing(false);
+      return;
+    }
+
+    let mounted = true;
+
+    const loadExistingProfile = async () => {
+      try {
+        const [identityRes, profileRes, ikigaiRes, personalityRes] = await Promise.all([
+          supabase.from("user_identity").select("identity_type, intent_types").eq("user_id", user.id).maybeSingle(),
+          supabase
+            .from("profiles")
+            .select("name, location_country, location_city, industries, industry_other, core_skills, linkedin_url, twitter_url, github_url, portfolio_url")
+            .eq("user_id", user.id)
+            .maybeSingle(),
+          supabase
+            .from("ikigai")
+            .select("love_text, good_at_text, world_needs_text, livelihood_text")
+            .eq("user_id", user.id)
+            .maybeSingle(),
+          supabase.from("personality").select("*").eq("user_id", user.id).maybeSingle(),
+        ]);
+
+        if (!mounted) return;
+
+        const personalityRaw = (personalityRes.data ?? {}) as Record<string, any>;
+        const {
+          id: _id,
+          user_id: _userId,
+          created_at: _createdAt,
+          updated_at: _updatedAt,
+          ...personalityAnswers
+        } = personalityRaw;
+
+        setData((prev) => ({
+          ...prev,
+          identity: identityRes.data?.identity_type || prev.identity,
+          intent: identityRes.data?.intent_types?.[0] || prev.intent,
+          profile: {
+            ...prev.profile,
+            name: profileRes.data?.name || "",
+            location_country: profileRes.data?.location_country || "",
+            location_city: profileRes.data?.location_city || "",
+            industries: profileRes.data?.industries || [],
+            industry_other: profileRes.data?.industry_other || "",
+            skills: profileRes.data?.core_skills || [],
+            linkedin: profileRes.data?.linkedin_url || "",
+            twitter: profileRes.data?.twitter_url || "",
+            github: profileRes.data?.github_url || "",
+            portfolio: profileRes.data?.portfolio_url || "",
+          },
+          ikigai: {
+            love: ikigaiRes.data?.love_text || "",
+            good: ikigaiRes.data?.good_at_text || "",
+            world: ikigaiRes.data?.world_needs_text || "",
+            livelihood: ikigaiRes.data?.livelihood_text || "",
+          },
+          assessmentAnswers: personalityAnswers,
+        }));
+      } catch (error) {
+        console.error("Failed to load existing onboarding data", error);
+      } finally {
+        if (mounted) setInitializing(false);
+      }
+    };
+
+    loadExistingProfile();
+
+    return () => {
+      mounted = false;
+    };
+  }, [user]);
 
   const next = async () => {
     if (!user) return;
@@ -81,6 +158,14 @@ const Onboarding = () => {
   const back = () => {
     if (step > 0) setStep(step - 1);
   };
+
+  if (initializing) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-muted-foreground">Loading your profile...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">

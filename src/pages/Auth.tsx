@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
 const Auth = () => {
@@ -31,7 +32,22 @@ const Auth = () => {
       if (error) {
         toast.error(error.message);
       } else {
-        navigate("/onboarding");
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user) {
+          navigate("/onboarding");
+        } else {
+          const [identityRes, ikigaiRes, personalityRes] = await Promise.all([
+            supabase.from("user_identity").select("id").eq("user_id", user.id).maybeSingle(),
+            supabase.from("ikigai").select("id").eq("user_id", user.id).maybeSingle(),
+            supabase.from("personality").select("id").eq("user_id", user.id).maybeSingle(),
+          ]);
+
+          const isOnboardingComplete = Boolean(identityRes.data && ikigaiRes.data && personalityRes.data);
+          navigate(isOnboardingComplete ? "/search" : "/onboarding");
+        }
       }
     }
     setLoading(false);
