@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown, AlertTriangle, MessageSquare, Sparkles, UserPlus, Check, Loader2 } from "lucide-react";
+import { ChevronDown, AlertTriangle, MessageSquare, Sparkles, UserPlus, Check, Loader2, Shield, Flame, Scale } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -10,6 +10,12 @@ interface Risk {
   type: string;
   severity: "Low" | "Medium" | "High";
   explanation: string;
+}
+
+interface PersonalityAlignment {
+  dimension: string;
+  match: "good" | "neutral" | "friction";
+  detail: string;
 }
 
 interface Match {
@@ -22,6 +28,7 @@ interface Match {
   strengths: string[];
   risks: Risk[];
   starters: string[];
+  personality_alignment?: PersonalityAlignment[];
   user_id?: string;
 }
 
@@ -142,8 +149,8 @@ const MatchCard = ({ match }: { match: Match }) => {
             onClick={() => setExpanded(!expanded)}
             className="flex items-center gap-1 text-sm text-accent hover:opacity-80 transition-opacity"
           >
-            <MessageSquare className="w-3.5 h-3.5" />
-            Conversation starters
+            <Shield className="w-3.5 h-3.5" />
+            View analysis & starters
             <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} />
           </button>
 
@@ -180,13 +187,48 @@ const MatchCard = ({ match }: { match: Match }) => {
             transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
-            <div className="px-6 pb-6 border-t border-border pt-4 space-y-3">
-              {match.starters.map((s, i) => (
-                <div key={i} className="flex items-start gap-2">
-                  <span className="text-xs text-muted-foreground mt-0.5">{i + 1}.</span>
-                  <p className="text-sm text-foreground">{s}</p>
+            <div className="px-6 pb-6 border-t border-border pt-4 space-y-5">
+              
+              {/* Personality Alignment Section (New) */}
+              {match.personality_alignment && match.personality_alignment.length > 0 && (
+                <div>
+                  <h4 className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                    <Scale className="w-3.5 h-3.5" /> Personality Alignment
+                  </h4>
+                  <div className="space-y-2">
+                    {match.personality_alignment.map((item, i) => (
+                      <div key={i} className="flex items-start gap-2 text-sm bg-secondary/30 p-2 rounded-lg">
+                        <div className={`mt-0.5 w-1.5 h-1.5 rounded-full shrink-0 
+                          ${item.match === "good" ? "bg-success" : 
+                            item.match === "friction" ? "bg-destructive" : "bg-muted-foreground"}`} 
+                        />
+                        <div className="flex-1">
+                          <span className="font-medium text-foreground">{item.dimension}: </span>
+                          <span className="text-muted-foreground">{item.detail}</span>
+                        </div>
+                        {item.match === "good" && <Check className="w-3.5 h-3.5 text-success shrink-0" />}
+                        {item.match === "friction" && <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0" />}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
+              )}
+
+              {/* Conversation Starters Section */}
+              <div>
+                <h4 className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                  <MessageSquare className="w-3.5 h-3.5" /> Things to discuss
+                </h4>
+                <div className="space-y-2">
+                  {match.starters.map((s, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <span className="text-xs text-muted-foreground mt-0.5">{i + 1}.</span>
+                      <p className="text-sm text-foreground">{s}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
             </div>
           </motion.div>
         )}
