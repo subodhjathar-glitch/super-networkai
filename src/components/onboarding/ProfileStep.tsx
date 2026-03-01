@@ -1,6 +1,10 @@
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Upload } from "lucide-react";
+import { ArrowLeft, Upload, CheckCircle, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 import ScrollableSelect from "./inputs/ScrollableSelect";
 import TagInput from "./inputs/TagInput";
 import { INDUSTRIES, COUNTRIES, SKILLS } from "./constants";
@@ -26,8 +30,50 @@ interface Props {
 }
 
 const ProfileStep = ({ data, onChange, onNext, onBack }: Props) => {
+  const { user } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [cvFileName, setCvFileName] = useState<string | null>(null);
+
   const update = (partial: Partial<ProfileData>) => {
     onChange({ ...data, ...partial });
+  };
+
+  const handleCvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      toast.error("File too large. Max 10MB.");
+      return;
+    }
+
+    const allowed = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
+    if (!allowed.includes(file.type)) {
+      toast.error("Please upload a PDF or Word document.");
+      return;
+    }
+
+    setUploading(true);
+    const ext = file.name.split(".").pop();
+    const filePath = `${user.id}/cv.${ext}`;
+
+    const { error } = await supabase.storage.from("cvs").upload(filePath, file, { upsert: true });
+
+    if (error) {
+      console.error("CV upload error:", error);
+      toast.error("Upload failed. Please try again.");
+      setUploading(false);
+      return;
+    }
+
+    // Save the path to profile
+    await supabase.from("profiles").update({ cv_url: filePath }).eq("user_id", user.id);
+
+    setCvFileName(file.name);
+    toast.success("CV uploaded successfully!");
+    setUploading(false);
   };
 
   const canProceed = data.name.trim() && (data.location_country || data.location_city) && (data.industries.length > 0 || data.industry_other);
@@ -140,12 +186,39 @@ const ProfileStep = ({ data, onChange, onNext, onBack }: Props) => {
         {/* CV Upload area */}
         <div>
           <label className="text-sm font-medium text-foreground mb-1.5 block">CV Upload</label>
-          <div className="border-2 border-dashed border-border rounded-xl p-8 text-center hover:border-accent/40 transition-colors cursor-pointer bg-card">
-            <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
-            <p className="text-sm text-foreground font-medium mb-1">Drop your CV here or click to browse</p>
-            <p className="text-xs text-muted-foreground">
-              Your CV helps us understand your journey. It takes 30 seconds and makes your matches significantly more accurate.
-            </p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.doc,.docx"
+            className="hidden"
+            onChange={handleCvUpload}
+          />
+          <div
+            onClick={() => !uploading && fileInputRef.current?.click()}
+            className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer bg-card ${
+              cvFileName ? "border-accent/60" : "border-border hover:border-accent/40"
+            }`}
+          >
+            {uploading ? (
+              <>
+                <Loader2 className="w-8 h-8 text-accent mx-auto mb-3 animate-spin" />
+                <p className="text-sm text-foreground font-medium mb-1">Uploading...</p>
+              </>
+            ) : cvFileName ? (
+              <>
+                <CheckCircle className="w-8 h-8 text-accent mx-auto mb-3" />
+                <p className="text-sm text-foreground font-medium mb-1">{cvFileName}</p>
+                <p className="text-xs text-muted-foreground">Click to replace</p>
+              </>
+            ) : (
+              <>
+                <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+                <p className="text-sm text-foreground font-medium mb-1">Drop your CV here or click to browse</p>
+                <p className="text-xs text-muted-foreground">
+                  PDF or Word document, max 10MB. Makes your matches significantly more accurate.
+                </p>
+              </>
+            )}
           </div>
         </div>
       </div>
