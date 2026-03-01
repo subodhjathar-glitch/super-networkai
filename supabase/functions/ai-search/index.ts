@@ -121,7 +121,7 @@ serve(async (req) => {
         .select("user_id")
         .neq("user_id", userId)
         .eq("visibility", "public")
-        .limit(10);
+        .limit(50);
       candidateIds = (allProfiles || []).map((p: any) => p.user_id);
     }
 
