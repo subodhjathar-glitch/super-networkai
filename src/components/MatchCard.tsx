@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown, AlertTriangle, MessageSquare, Sparkles } from "lucide-react";
+import { ChevronDown, AlertTriangle, MessageSquare, Sparkles, UserPlus, Check, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 interface Risk {
   type: string;
@@ -19,6 +22,7 @@ interface Match {
   strengths: string[];
   risks: Risk[];
   starters: string[];
+  user_id?: string;
 }
 
 const severityColors = {
@@ -29,6 +33,46 @@ const severityColors = {
 
 const MatchCard = ({ match }: { match: Match }) => {
   const [expanded, setExpanded] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [connected, setConnected] = useState(false);
+  const { user } = useAuth();
+
+  const handleConnect = async () => {
+    if (!user || !match.user_id) {
+      toast.error("Unable to connect — missing user information.");
+      return;
+    }
+    setConnecting(true);
+    try {
+      // Check if connection already exists
+      const { data: existing } = await supabase
+        .from("connections")
+        .select("id")
+        .or(`and(requester_id.eq.${user.id},recipient_id.eq.${match.user_id}),and(requester_id.eq.${match.user_id},recipient_id.eq.${user.id})`)
+        .maybeSingle();
+
+      if (existing) {
+        toast.info("Connection already exists!");
+        setConnected(true);
+        return;
+      }
+
+      const { error } = await supabase.from("connections").insert({
+        requester_id: user.id,
+        recipient_id: match.user_id,
+        status: "pending",
+      });
+
+      if (error) throw error;
+      setConnected(true);
+      toast.success(`Connection request sent to ${match.name.split(" ")[0]}!`);
+    } catch (err: any) {
+      console.error("Connect error:", err);
+      toast.error("Failed to send connection request.");
+    } finally {
+      setConnecting(false);
+    }
+  };
 
   return (
     <div className="bg-card rounded-xl shadow-card border border-border overflow-hidden hover:shadow-elevated transition-shadow">
@@ -92,15 +136,38 @@ const MatchCard = ({ match }: { match: Match }) => {
           ))}
         </div>
 
-        {/* Expand toggle */}
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="flex items-center gap-1 text-sm text-accent hover:opacity-80 transition-opacity"
-        >
-          <MessageSquare className="w-3.5 h-3.5" />
-          Conversation starters
-          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} />
-        </button>
+        {/* Actions row */}
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="flex items-center gap-1 text-sm text-accent hover:opacity-80 transition-opacity"
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            Conversation starters
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} />
+          </button>
+
+          {match.user_id && (
+            <button
+              onClick={handleConnect}
+              disabled={connecting || connected}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all
+                ${connected
+                  ? "bg-success/15 text-success cursor-default"
+                  : "gradient-hero text-primary-foreground hover:opacity-90"
+                }`}
+            >
+              {connecting ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : connected ? (
+                <Check className="w-3.5 h-3.5" />
+              ) : (
+                <UserPlus className="w-3.5 h-3.5" />
+              )}
+              {connecting ? "Sending..." : connected ? "Requested" : "Connect"}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Expandable */}
@@ -120,9 +187,6 @@ const MatchCard = ({ match }: { match: Match }) => {
                   <p className="text-sm text-foreground">{s}</p>
                 </div>
               ))}
-              <button className="w-full mt-3 py-2.5 rounded-lg gradient-hero text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
-                Connect with {match.name.split(" ")[0]}
-              </button>
             </div>
           </motion.div>
         )}
