@@ -68,6 +68,10 @@ const SearchPage = () => {
     if (!query.trim()) return;
     setLoading(true);
     setSearched(false);
+    setShowResults(false);
+    setMatches([]);
+    setFollowUp("");
+    setFollowUpAnswer("");
 
     const result = await callAiSearch("follow-up", { query: query.trim() });
     setLoading(false);
