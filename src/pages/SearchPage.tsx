@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Search, MessageCircle, ArrowLeft } from "lucide-react";
+import { Search, MessageCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import MatchCard from "@/components/MatchCard";
 
 const placeholders = [
@@ -12,78 +14,84 @@ const placeholders = [
   "A UX designer looking for creative ownership in fintech...",
 ];
 
-const mockMatches = [
-  {
-    name: "Priya Sharma",
-    role: "Founder · Health Tech",
-    location: "Mumbai, India",
-    compatibility: 87,
-    sustainability: 72,
-    summary: "Priya brings deep technical expertise in health tech with a mission-first mindset. Her commitment to long-term impact aligns strongly with your vision.",
-    strengths: ["Technical depth", "Mission alignment", "Health tech domain"],
-    risks: [
-      { type: "Commitment Pace", severity: "Medium" as const, explanation: "Priya's preferred timeline is flexible, while your search suggests a need for full-time urgency — worth discussing early." },
-      { type: "Decision Style", severity: "Low" as const, explanation: "You both prefer collaborative decisions, though you lean slightly more directive under pressure." },
-    ],
-    starters: [
-      "How do you each envision the first 6 months of working together?",
-      "What does 'full commitment' look like in your day-to-day life right now?",
-      "How would you handle a situation where the product needs to pivot significantly?",
-    ],
-  },
-  {
-    name: "Alex Chen",
-    role: "Founder · AI/ML",
-    location: "San Francisco, USA",
-    compatibility: 82,
-    sustainability: 88,
-    summary: "Alex is a resilient builder with strong alignment on recognition sharing and conflict resolution. A partnership with strong long-term health indicators.",
-    strengths: ["Resilience", "Value alignment", "AI expertise"],
-    risks: [
-      { type: "Industry Focus", severity: "Low" as const, explanation: "Alex's experience is primarily in AI/ML infrastructure — may benefit from alignment on health tech specifics." },
-    ],
-    starters: [
-      "What drew you to the intersection of AI and healthcare?",
-      "How do you balance technical ambition with user-centred design?",
-      "What's your approach to equity and financial fairness in a co-founding relationship?",
-    ],
-  },
-  {
-    name: "Sarah Okafor",
-    role: "Professional · Product Design",
-    location: "Lagos, Nigeria",
-    compatibility: 79,
-    sustainability: 65,
-    summary: "Sarah's product design skills and passion for social impact make her a compelling match, though communication rhythm and commitment expectations may need alignment.",
-    strengths: ["Design excellence", "Social impact focus", "Cross-cultural perspective"],
-    risks: [
-      { type: "Mission Priority", severity: "High" as const, explanation: "Sarah's assessment suggests she may prioritise personal creative goals alongside team mission — worth exploring how she balances both." },
-      { type: "Communication Rhythm", severity: "Medium" as const, explanation: "Your preferred daily check-ins differ from Sarah's preference for weekly async updates." },
-    ],
-    starters: [
-      "How do you balance personal creative projects with team commitments?",
-      "What does your ideal communication flow look like day-to-day?",
-      "When have you felt most fulfilled working as part of a team?",
-    ],
-  },
-];
-
 const SearchPage = () => {
   const [query, setQuery] = useState("");
   const [searched, setSearched] = useState(false);
   const [followUp, setFollowUp] = useState("");
   const [followUpAnswer, setFollowUpAnswer] = useState("");
   const [showResults, setShowResults] = useState(false);
+  const [matches, setMatches] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleSearch = () => {
-    if (!query.trim()) return;
-    setSearched(true);
-    setFollowUp("Are you looking for someone who can commit full-time, or would part-time work too?");
+  const getToken = async () => {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token;
   };
 
-  const handleFollowUp = () => {
-    setShowResults(true);
+  const callAiSearch = async (step: string, body: any) => {
+    const token = await getToken();
+    if (!token) {
+      toast.error("Please sign in first.");
+      navigate("/auth");
+      return null;
+    }
+
+    const res = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-search`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ step, ...body }),
+      }
+    );
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Unknown error" }));
+      if (res.status === 429) {
+        toast.error("Rate limited. Please wait a moment and try again.");
+      } else if (res.status === 402) {
+        toast.error("Usage limit reached. Please add credits.");
+      } else {
+        toast.error(err.error || "Search failed. Please try again.");
+      }
+      return null;
+    }
+
+    return res.json();
+  };
+
+  const handleSearch = async () => {
+    if (!query.trim()) return;
+    setLoading(true);
+    setSearched(false);
+
+    const result = await callAiSearch("follow-up", { query: query.trim() });
+    setLoading(false);
+
+    if (result) {
+      setFollowUp(result.followUp || "What's most important to you in this collaboration?");
+      setSearched(true);
+    }
+  };
+
+  const handleFollowUp = async () => {
+    if (!followUpAnswer.trim()) return;
+    setLoading(true);
+
+    const result = await callAiSearch("search", {
+      query: query.trim(),
+      followUpAnswer: followUpAnswer.trim(),
+    });
+    setLoading(false);
+
+    if (result) {
+      setMatches(result.matches || []);
+      setShowResults(true);
+    }
   };
 
   return (
@@ -124,12 +132,14 @@ const SearchPage = () => {
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
               placeholder={placeholders[0]}
               className="h-14 pl-12 pr-28 text-base rounded-xl shadow-card border-border"
+              disabled={loading}
             />
             <Button
               onClick={handleSearch}
+              disabled={loading || !query.trim()}
               className="absolute right-2 top-1/2 -translate-y-1/2 gradient-hero text-primary-foreground border-0 hover:opacity-90"
             >
-              Search
+              {loading && !searched ? "..." : "Search"}
             </Button>
           </div>
 
@@ -153,9 +163,14 @@ const SearchPage = () => {
                       onKeyDown={(e) => e.key === "Enter" && handleFollowUp()}
                       placeholder="Type your answer..."
                       className="flex-1"
+                      disabled={loading}
                     />
-                    <Button onClick={handleFollowUp} variant="outline" disabled={!followUpAnswer.trim()}>
-                      Answer
+                    <Button
+                      onClick={handleFollowUp}
+                      variant="outline"
+                      disabled={!followUpAnswer.trim() || loading}
+                    >
+                      {loading ? "..." : "Answer"}
                     </Button>
                   </div>
                 </div>
@@ -171,11 +186,19 @@ const SearchPage = () => {
               className="space-y-6"
             >
               <p className="text-sm text-muted-foreground">
-                {mockMatches.length} matches found — ranked by compatibility and sustainability
+                {matches.length} matches found — ranked by compatibility and sustainability
               </p>
-              {mockMatches.map((match, i) => (
+              {matches.length === 0 && (
+                <div className="text-center py-12">
+                  <p className="text-muted-foreground text-lg">No matches found yet.</p>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    More people need to complete their profiles for matching to work.
+                  </p>
+                </div>
+              )}
+              {matches.map((match, i) => (
                 <motion.div
-                  key={match.name}
+                  key={match.name + i}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.15 }}
