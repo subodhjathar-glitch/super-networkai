@@ -26,21 +26,15 @@ const extractQueryTerms = (value: string) => {
     normalized
       .split(" ")
       .map((w) => w.trim())
-      .filter((w) => w.length >= 4 && !STOP_WORDS.has(w))
-  )).slice(0, 8);
+      .filter((w) => w.length >= 2 && !STOP_WORDS.has(w))
+  )).slice(0, 10);
 };
 
 const hasTermEvidence = (text: string, terms: string[]) => {
   if (terms.length === 0) return true;
-  const normalizedText = ` ${normalizeText(text)} `;
-  return terms.some((term) => {
-    const t = term.toLowerCase();
-    return (
-      normalizedText.includes(` ${t} `) ||
-      normalizedText.includes(` ${t}s `) ||
-      normalizedText.includes(` ${t}ing `)
-    );
-  });
+  const normalizedText = normalizeText(text);
+  // At least one query term must appear as a substring in the profile text
+  return terms.some((term) => normalizedText.includes(term.toLowerCase()));
 };
 
 serve(async (req) => {
