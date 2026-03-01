@@ -24,23 +24,38 @@ const SearchPage = () => {
   const [matches, setMatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
+  const [profileName, setProfileName] = useState("");
+  const [noMatchReason, setNoMatchReason] = useState("");
   const navigate = useNavigate();
   const { user } = useAuth();
 
   useEffect(() => {
     if (!user) return;
+
     const check = async () => {
-      const { data } = await supabase
-        .from("user_identity")
-        .select("id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      if (!data) {
+      const [identityRes, profileRes] = await Promise.all([
+        supabase
+          .from("user_identity")
+          .select("id")
+          .eq("user_id", user.id)
+          .maybeSingle(),
+        supabase
+          .from("profiles")
+          .select("name")
+          .eq("user_id", user.id)
+          .maybeSingle(),
+      ]);
+
+      const name = profileRes.data?.name?.trim() || user.email?.split("@")[0] || "there";
+      setProfileName(name);
+
+      if (!identityRes.data) {
         navigate("/onboarding", { replace: true });
       } else {
         setCheckingOnboarding(false);
       }
     };
+
     check();
   }, [user, navigate]);
 
@@ -92,6 +107,7 @@ const SearchPage = () => {
     setMatches([]);
     setFollowUp("");
     setFollowUpAnswer("");
+    setNoMatchReason("");
 
     const result = await callAiSearch("follow-up", { query: query.trim() });
     setLoading(false);
@@ -114,6 +130,7 @@ const SearchPage = () => {
 
     if (result) {
       setMatches(result.matches || []);
+      setNoMatchReason(result.noMatchReason || "");
       setShowResults(true);
     }
   };
@@ -138,6 +155,7 @@ const SearchPage = () => {
             <span className="font-display font-bold text-lg text-foreground">SuperNetworkAI</span>
           </button>
           <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground hidden sm:inline">Hi, {profileName || "there"}</span>
             <Button variant="outline" size="sm" onClick={() => navigate("/onboarding")}>
               Edit Profile
             </Button>
@@ -230,9 +248,9 @@ const SearchPage = () => {
               </p>
               {matches.length === 0 && (
                 <div className="text-center py-12">
-                  <p className="text-muted-foreground text-lg">No matches found yet.</p>
+                  <p className="text-muted-foreground text-lg">No exact matches found.</p>
                   <p className="text-sm text-muted-foreground mt-2">
-                    More people need to complete their profiles for matching to work.
+                    {noMatchReason || "Try broader wording or related skill terms."}
                   </p>
                 </div>
               )}
