@@ -12,10 +12,38 @@ interface Props {
 }
 
 const questions = [
-  { key: "love" as const, label: "What kind of work makes you lose track of time?", circle: "Love", color: "var(--ikigai-love)" },
-  { key: "good" as const, label: "What do people consistently come to you for — where do you feel genuinely capable?", circle: "Skill", color: "var(--ikigai-good)" },
-  { key: "world" as const, label: "What problem or change in the world feels personal to you?", circle: "Need", color: "var(--ikigai-world)" },
-  { key: "livelihood" as const, label: "What kind of contribution would you build a career around, even knowing it would be hard?", circle: "Value", color: "var(--ikigai-livelihood)" },
+  {
+    key: "love" as const,
+    label: "What do you love?",
+    prompt: "What activities, topics, or types of work make you feel most alive? Think about moments when you lose track of time — not because you have to, but because you genuinely want to keep going.",
+    placeholder: "e.g. I love solving complex problems with a small team, designing experiences that simplify people's lives, mentoring early-career professionals, building things from scratch where nothing existed before...",
+    circle: "Love",
+    color: "var(--ikigai-love)",
+  },
+  {
+    key: "good" as const,
+    label: "What are you good at?",
+    prompt: "What skills, abilities, or strengths do people consistently recognise in you? Think about what others come to you for — the things you do well, even when you're not trying.",
+    placeholder: "e.g. I'm naturally good at breaking down ambiguous problems into clear steps, connecting people who should know each other, writing that makes complex ideas accessible, staying calm under pressure...",
+    circle: "Skill",
+    color: "var(--ikigai-good)",
+  },
+  {
+    key: "world" as const,
+    label: "What does the world need?",
+    prompt: "What problems, gaps, or injustices in the world feel personal to you? What change would you work toward even if no one was watching or paying you?",
+    placeholder: "e.g. Better access to quality education regardless of where you're born, more ethical use of AI in hiring, affordable mental health support for founders, bridging the gap between rural talent and global opportunities...",
+    circle: "Need",
+    color: "var(--ikigai-world)",
+  },
+  {
+    key: "livelihood" as const,
+    label: "What can you be paid for?",
+    prompt: "What skills, expertise, or value can you offer that people or organisations would pay for? Think broadly — this isn't just your current job, but what you could realistically build a livelihood around.",
+    placeholder: "e.g. Product strategy consulting, full-stack development, leadership coaching, content creation and brand storytelling, data analysis and business intelligence...",
+    circle: "Value",
+    color: "var(--ikigai-livelihood)",
+  },
 ];
 
 const IkigaiStep = ({ ikigai, onChange, onNext, onBack }: Props) => {
@@ -41,8 +69,7 @@ const IkigaiStep = ({ ikigai, onChange, onNext, onBack }: Props) => {
           Discover your Ikigai
         </h1>
         <p className="text-muted-foreground">
-          Ikigai is a Japanese concept meaning your reason for being — where what you love,
-          what you're good at, what the world needs, and what you can build a livelihood from all meet.
+          Ikigai (生き甲斐) is a Japanese concept meaning "your reason for being" — the intersection of what you love, what you're good at, what the world needs, and what you can be paid for. Take your time with each question — the more honest and detailed you are, the better your matches will be.
         </p>
       </div>
 
@@ -121,14 +148,17 @@ const IkigaiStep = ({ ikigai, onChange, onNext, onBack }: Props) => {
               />
             ))}
           </div>
-          <p className="text-sm font-medium text-foreground">
+          <p className="text-base font-semibold text-foreground mb-1">
             {questions[activeQ].label}
+          </p>
+          <p className="text-sm text-muted-foreground mb-3">
+            {questions[activeQ].prompt}
           </p>
           <Textarea
             value={ikigai[questions[activeQ].key]}
             onChange={(e) => handleAnswer(e.target.value)}
-            placeholder="Take your time — there are no wrong answers..."
-            className="min-h-[120px] resize-none"
+            placeholder={questions[activeQ].placeholder}
+            className="min-h-[140px] resize-none"
           />
           {activeQ < 3 && ikigai[questions[activeQ].key].trim() && (
             <Button
