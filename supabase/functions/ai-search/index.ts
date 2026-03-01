@@ -7,6 +7,42 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const STOP_WORDS = new Set([
+  "a", "an", "the", "and", "or", "for", "with", "from", "that", "this", "those", "these",
+  "who", "what", "where", "when", "why", "how", "someone", "person", "people", "looking",
+  "need", "wants", "want", "like", "into", "over", "under", "through", "about", "your", "their",
+]);
+
+const normalizeText = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const extractQueryTerms = (value: string) => {
+  const normalized = normalizeText(value);
+  return Array.from(new Set(
+    normalized
+      .split(" ")
+      .map((w) => w.trim())
+      .filter((w) => w.length >= 4 && !STOP_WORDS.has(w))
+  )).slice(0, 8);
+};
+
+const hasTermEvidence = (text: string, terms: string[]) => {
+  if (terms.length === 0) return true;
+  const normalizedText = ` ${normalizeText(text)} `;
+  return terms.some((term) => {
+    const t = term.toLowerCase();
+    return (
+      normalizedText.includes(` ${t} `) ||
+      normalizedText.includes(` ${t}s `) ||
+      normalizedText.includes(` ${t}ing `)
+    );
+  });
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -163,10 +199,11 @@ serve(async (req) => {
       });
     });
 
-    // Use Groq LLM to score and generate match reports
-    const candidateSummaries = candidates.map(c => {
+    // Build candidate summaries and apply strict evidence pre-filter
+    const candidatePool = candidates.map(c => {
       const cd = candidateMap.get(c.user_id);
       const parts = [`Name: ${c.name || "Unknown"}`];
+      if (c.domain) parts.push(`Domain: ${c.domain}`);
       if (c.industries?.length) parts.push(`Industries: ${c.industries.join(", ")}`);
       if (c.core_skills?.length) parts.push(`Skills: ${c.core_skills.join(", ")}`);
       if (c.location_country) parts.push(`Location: ${c.location_city || ""} ${c.location_country}`);
@@ -181,10 +218,31 @@ serve(async (req) => {
           if (cd.personality[k]) parts.push(`${k}: ${cd.personality[k]}`);
         });
       }
-      return { userId: c.user_id, summary: parts.join(". ") };
+
+      const roleLabel = c.domain || cd?.identity?.identity_type || "Professional";
+      return {
+        userId: c.user_id,
+        profile: c,
+        roleLabel,
+        summary: parts.join(". "),
+      };
     });
 
-    const scoringPrompt = `You are a professional networking AI that scores matches.
+    const queryTerms = extractQueryTerms(query || "");
+    const filteredPool = queryTerms.length > 0
+      ? candidatePool.filter((c) => hasTermEvidence(c.summary, queryTerms))
+      : candidatePool;
+
+    if (filteredPool.length === 0) {
+      return new Response(JSON.stringify({
+        matches: [],
+        noMatchReason: `No exact role/skill match found for "${query}". Try broader terms or synonyms.`,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const scoringPrompt = `You are a strict professional matching AI.
 
 SEARCHER:
 Name: ${searcherProfile?.name || "Unknown"}
@@ -192,19 +250,27 @@ Query: "${fullQuery}"
 Identity: ${searcherIdentity?.identity_type || "unknown"}, Intent: ${(searcherIdentity?.intent_types || []).join(", ")}
 ${searcherPersonality ? `Working style: ${searcherPersonality.working_style || "unknown"}, Communication: ${searcherPersonality.communication_style || "unknown"}` : ""}
 
+QUERY TERMS THAT MUST HAVE EVIDENCE: ${queryTerms.join(", ") || "(none)"}
+
 CANDIDATES:
-${candidateSummaries.map((c, i) => `[${i}] ${c.summary}`).join("\n")}
+${filteredPool.map((c, i) => `[${i}] ${c.summary}`).join("\n")}
 
-For each candidate, return a JSON array of match objects. Each match must have:
-- index (number): candidate index
-- compatibility (number 0-100): how well they match the search query and searcher profile
-- sustainability (number 0-100): long-term partnership health
-- summary (string): 1-2 sentence insight about this match
-- strengths (string[]): 2-3 key strengths
-- risks (array of {type: string, severity: "Low"|"Medium"|"High", explanation: string}): 1-2 risk flags
-- starters (string[]): 2-3 conversation starters
+Rules:
+- Return ONLY candidates with clear evidence from their profile summary.
+- Do NOT infer missing skills or roles.
+- If no candidate clearly matches, return an empty array.
+- Compatibility must be <= 40 when evidence is weak.
 
-Return ONLY valid JSON array, no other text.`;
+Return a JSON array where each item has:
+- index (number)
+- compatibility (0-100)
+- sustainability (0-100)
+- summary (1-2 sentences grounded in explicit evidence)
+- strengths (2-3 strings)
+- risks (1-2 items: {type, severity: "Low"|"Medium"|"High", explanation})
+- starters (2-3 strings)
+
+Return ONLY valid JSON array.`;
 
     const scoringRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
@@ -212,76 +278,67 @@ Return ONLY valid JSON array, no other text.`;
       body: JSON.stringify({
         model: "llama-3.3-70b-versatile",
         messages: [{ role: "user", content: scoringPrompt }],
-        max_tokens: 4000,
-        temperature: 0.5,
-        response_format: { type: "json_object" },
+        max_tokens: 3000,
+        temperature: 0.2,
       }),
     });
 
     if (!scoringRes.ok) {
       const errText = await scoringRes.text();
       console.error("Groq scoring error:", scoringRes.status, errText);
-      // Return basic matches without AI scoring
-      const basicMatches = candidates.map(c => ({
-        name: c.name || "Unknown",
-        role: candidateMap.get(c.user_id)?.identity?.identity_type || "Professional",
-        location: [c.location_city, c.location_country].filter(Boolean).join(", ") || "Unknown",
-        compatibility: 70,
-        sustainability: 65,
-        summary: `${c.name} has relevant skills and experience.`,
-        strengths: c.core_skills?.slice(0, 3) || ["Professional"],
-        risks: [],
-        starters: ["Tell me about your current projects.", "What drives your work?"],
-        userId: c.user_id,
-      }));
-      return new Response(JSON.stringify({ matches: basicMatches }), {
+      return new Response(JSON.stringify({ matches: [] }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const scoringData = await scoringRes.json();
-    let matchScores: any[];
+    let matchScores: any[] = [];
     try {
-      const content = scoringData.choices?.[0]?.message?.content || "{}";
+      const rawContent = scoringData.choices?.[0]?.message?.content || "[]";
+      const content = rawContent
+        .replace(/^```json\s*/i, "")
+        .replace(/^```\s*/i, "")
+        .replace(/```$/i, "")
+        .trim();
       const parsed = JSON.parse(content);
-      matchScores = Array.isArray(parsed) ? parsed : parsed.matches || parsed.results || Object.values(parsed)[0] || [];
+      matchScores = Array.isArray(parsed) ? parsed : parsed.matches || [];
     } catch {
       matchScores = [];
     }
 
     const matches = matchScores
-      .filter((m: any) => typeof m.index === "number" && m.index < candidateSummaries.length)
+      .filter((m: any) => typeof m.index === "number" && m.index >= 0 && m.index < filteredPool.length)
       .map((m: any) => {
-        const candidate = candidates[m.index];
-        const cd = candidateMap.get(candidate?.user_id);
+        const candidateItem = filteredPool[m.index];
+        const candidate = candidateItem?.profile;
+
         return {
           name: candidate?.name || "Unknown",
-          role: cd?.identity
-            ? `${cd.identity.identity_type}${cd.identity.intent_types?.length ? " · " + cd.identity.intent_types[0] : ""}`
-            : "Professional",
+          role: candidateItem?.roleLabel || "Professional",
           location: [candidate?.location_city, candidate?.location_country].filter(Boolean).join(", ") || "Unknown",
-          compatibility: Math.min(100, Math.max(0, m.compatibility || 70)),
-          sustainability: Math.min(100, Math.max(0, m.sustainability || 65)),
-          summary: m.summary || `${candidate?.name} is a potential match.`,
-          strengths: m.strengths || [],
-          risks: (m.risks || []).map((r: any) => ({
+          compatibility: Math.min(100, Math.max(0, Number(m.compatibility) || 0)),
+          sustainability: Math.min(100, Math.max(0, Number(m.sustainability) || 0)),
+          summary: m.summary || `${candidate?.name} may be a potential match.`,
+          strengths: Array.isArray(m.strengths) ? m.strengths : [],
+          risks: (Array.isArray(m.risks) ? m.risks : []).map((r: any) => ({
             type: r.type || "Unknown",
             severity: ["Low", "Medium", "High"].includes(r.severity) ? r.severity : "Low",
             explanation: r.explanation || "",
           })),
-          starters: m.starters || ["Tell me about your work."],
-          userId: candidate?.user_id,
+          starters: Array.isArray(m.starters) && m.starters.length > 0 ? m.starters : ["Tell me about your work."],
+          user_id: candidate?.user_id,
         };
       })
+      .filter((m: any) => m.compatibility >= 45)
       .sort((a: any, b: any) => b.compatibility - a.compatibility);
 
     // Cache matches in DB
     for (const match of matches) {
-      if (match.userId) {
+      if (match.user_id) {
         try {
           await supabase.from("matches").insert({
             user_a_id: userId,
-            user_b_id: match.userId,
+            user_b_id: match.user_id,
             compatibility_score: match.compatibility / 100,
             sustainability_score: match.sustainability / 100,
             role_category: match.role,
