@@ -237,19 +237,23 @@ export type Database = {
           relationship_style: string | null
           scope_clarity: string | null
           startup_readiness: string | null
+          step_back_reason: string | null
           stress_response: string | null
           stress_response_other: string | null
           success_criteria: string | null
           timeline_style: string | null
           trust_style: string | null
+          trust_style_detail: string | null
           trust_style_other: string | null
           updated_at: string
           user_id: string
           vision_flexibility: string | null
+          vision_flexibility_detail: string | null
           vision_flexibility_other: string | null
           work_life_balance: string | null
           work_life_balance_other: string | null
           working_style: string | null
+          working_style_detail: string | null
           working_style_other: string | null
         }
         Insert: {
@@ -295,19 +299,23 @@ export type Database = {
           relationship_style?: string | null
           scope_clarity?: string | null
           startup_readiness?: string | null
+          step_back_reason?: string | null
           stress_response?: string | null
           stress_response_other?: string | null
           success_criteria?: string | null
           timeline_style?: string | null
           trust_style?: string | null
+          trust_style_detail?: string | null
           trust_style_other?: string | null
           updated_at?: string
           user_id: string
           vision_flexibility?: string | null
+          vision_flexibility_detail?: string | null
           vision_flexibility_other?: string | null
           work_life_balance?: string | null
           work_life_balance_other?: string | null
           working_style?: string | null
+          working_style_detail?: string | null
           working_style_other?: string | null
         }
         Update: {
@@ -353,19 +361,23 @@ export type Database = {
           relationship_style?: string | null
           scope_clarity?: string | null
           startup_readiness?: string | null
+          step_back_reason?: string | null
           stress_response?: string | null
           stress_response_other?: string | null
           success_criteria?: string | null
           timeline_style?: string | null
           trust_style?: string | null
+          trust_style_detail?: string | null
           trust_style_other?: string | null
           updated_at?: string
           user_id?: string
           vision_flexibility?: string | null
+          vision_flexibility_detail?: string | null
           vision_flexibility_other?: string | null
           work_life_balance?: string | null
           work_life_balance_other?: string | null
           working_style?: string | null
+          working_style_detail?: string | null
           working_style_other?: string | null
         }
         Relationships: []
