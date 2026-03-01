@@ -278,17 +278,21 @@ Return ONLY valid JSON array, no other text.`;
     // Cache matches in DB
     for (const match of matches) {
       if (match.userId) {
-        await supabase.from("matches").insert({
-          user_a_id: userId,
-          user_b_id: match.userId,
-          compatibility_score: match.compatibility / 100,
-          sustainability_score: match.sustainability / 100,
-          role_category: match.role,
-          strengths: match.strengths,
-          risk_flags: match.risks,
-          conversation_starters: match.starters,
-          summary: match.summary,
-        }).catch(() => {}); // Ignore duplicates
+        try {
+          await supabase.from("matches").insert({
+            user_a_id: userId,
+            user_b_id: match.userId,
+            compatibility_score: match.compatibility / 100,
+            sustainability_score: match.sustainability / 100,
+            role_category: match.role,
+            strengths: match.strengths,
+            risk_flags: match.risks,
+            conversation_starters: match.starters,
+            summary: match.summary,
+          });
+        } catch {
+          // Ignore duplicates
+        }
       }
     }
 
