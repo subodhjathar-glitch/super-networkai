@@ -42,14 +42,14 @@ const ChipSelector = ({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-col gap-2">
         {options.map((opt) => {
           const active = selectedArr.includes(opt.value);
           return (
             <button
               key={opt.value}
               onClick={() => toggle(opt.value)}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all border
+              className={`px-4 py-3 rounded-xl text-sm font-medium transition-all border text-left leading-relaxed
                 ${active
                   ? "bg-accent/15 border-accent/40 text-accent shadow-sm"
                   : "bg-card border-border text-muted-foreground hover:border-muted-foreground/40 hover:text-foreground"
@@ -62,7 +62,7 @@ const ChipSelector = ({
         {allowOther && (
           <button
             onClick={() => toggle("other")}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-all border
+            className={`px-4 py-3 rounded-xl text-sm font-medium transition-all border text-left leading-relaxed
               ${isOtherSelected
                 ? "bg-accent/15 border-accent/40 text-accent shadow-sm"
                 : "bg-card border-border text-muted-foreground hover:border-muted-foreground/40 hover:text-foreground"
