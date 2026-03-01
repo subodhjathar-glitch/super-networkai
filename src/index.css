@@ -1,0 +1,129 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* SuperNetworkAI — Near-black + Electric Emerald */
+    --background: 210 15% 6%;
+    --foreground: 60 10% 92%;
+
+    --card: 210 12% 9%;
+    --card-foreground: 60 10% 92%;
+
+    --popover: 210 12% 9%;
+    --popover-foreground: 60 10% 92%;
+
+    --primary: 160 100% 50%;
+    --primary-foreground: 210 15% 6%;
+
+    --secondary: 210 10% 12%;
+    --secondary-foreground: 60 10% 85%;
+
+    --muted: 210 8% 14%;
+    --muted-foreground: 210 8% 50%;
+
+    --accent: 160 100% 50%;
+    --accent-foreground: 210 15% 6%;
+
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 210 8% 15%;
+    --input: 210 8% 15%;
+    --ring: 160 100% 50%;
+
+    --radius: 0.75rem;
+
+    /* Brand */
+    --brand-warm: 160 100% 50%;
+    --brand-deep: 210 15% 6%;
+    --indigo-highlight: 160 100% 50%;
+    --indigo-glow: 210 15% 6%;
+
+    /* Ikigai colors */
+    --ikigai-love: 340 75% 58%;
+    --ikigai-good: 35 90% 58%;
+    --ikigai-world: 160 65% 45%;
+    --ikigai-livelihood: 265 65% 60%;
+
+    /* Insight flags */
+    --risk-low: 160 40% 15%;
+    --risk-low-foreground: 160 70% 65%;
+    --risk-medium: 40 50% 15%;
+    --risk-medium-foreground: 40 80% 65%;
+    --risk-high: 340 40% 15%;
+    --risk-high-foreground: 340 65% 65%;
+
+    --success: 160 70% 45%;
+    --success-foreground: 0 0% 100%;
+
+    /* Sidebar */
+    --sidebar-background: 210 12% 8%;
+    --sidebar-foreground: 60 10% 85%;
+    --sidebar-primary: 160 100% 50%;
+    --sidebar-primary-foreground: 210 15% 6%;
+    --sidebar-accent: 210 10% 12%;
+    --sidebar-accent-foreground: 60 10% 85%;
+    --sidebar-border: 210 8% 15%;
+    --sidebar-ring: 160 100% 50%;
+
+    /* Gradients */
+    --gradient-hero: linear-gradient(135deg, hsl(160 100% 50%), hsl(170 80% 40%));
+    --gradient-accent: linear-gradient(135deg, hsl(160 100% 50%), hsl(200 80% 50%));
+    --gradient-warm: linear-gradient(135deg, hsl(210 12% 9%), hsl(210 15% 12%));
+
+    /* Shadows */
+    --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.2);
+    --shadow-elevated: 0 15px 40px -10px rgba(0, 255, 170, 0.08), 0 5px 15px -5px rgba(0, 0, 0, 0.3);
+    --shadow-glow: 0 0 60px -15px rgba(0, 255, 170, 0.25);
+  }
+
+  .dark {
+    /* Already dark by default — identical */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Instrument Serif', Georgia, serif;
+  }
+}
+
+@layer utilities {
+  .gradient-hero {
+    background: var(--gradient-hero);
+  }
+  .gradient-accent {
+    background: var(--gradient-accent);
+  }
+  .gradient-warm {
+    background: var(--gradient-warm);
+  }
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+  .shadow-elevated {
+    box-shadow: var(--shadow-elevated);
+  }
+  .shadow-glow {
+    box-shadow: var(--shadow-glow);
+  }
+  .text-gradient {
+    background: var(--gradient-accent);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
