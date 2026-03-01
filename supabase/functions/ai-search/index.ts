@@ -193,6 +193,42 @@ serve(async (req) => {
       });
     });
 
+    // Helper to build a personality summary from all fields
+    const buildPersonalitySummary = (p: any) => {
+      if (!p) return "";
+      const fields = [
+        ["Working style", p.working_style, p.working_style_detail],
+        ["Communication style", p.communication_style],
+        ["Communication depth", p.communication_depth],
+        ["Communication rhythm", p.communication_rhythm],
+        ["Stress response", p.stress_response],
+        ["Conflict style", p.conflict_style, p.conflict_detail],
+        ["Trust style", p.trust_style, p.trust_style_detail],
+        ["Feedback style", p.feedback_style, p.feedback_style_detail],
+        ["Vision flexibility", p.vision_flexibility, p.vision_flexibility_detail],
+        ["Mission priority", p.mission_priority, p.mission_priority_detail],
+        ["Commitment type", p.commitment_type],
+        ["Commitment consistency", p.commitment_consistency],
+        ["Motivation style", p.motivation_style],
+        ["Recognition style", p.recognition_style],
+        ["Adaptability", p.adaptability],
+        ["Work-life balance", p.work_life_balance],
+        ["Decision speed", p.decision_speed],
+        ["Decision structure", p.decision_structure],
+        ["Autonomy level", p.autonomy_level],
+        ["Assertiveness", p.assertiveness],
+        ["Ownership style", p.ownership_style],
+        ["Ideal environment", p.ideal_environment],
+        ["Non-negotiables", p.non_negotiables],
+        ["Dealbreakers", p.dealbreakers],
+        ["Long-term vision", p.long_term_vision],
+      ];
+      return fields
+        .filter(([, val]) => val)
+        .map(([label, val, detail]) => detail ? `${label}: ${val} — ${detail}` : `${label}: ${val}`)
+        .join(". ");
+    };
+
     // Build candidate summaries and apply strict evidence pre-filter
     const candidatePool = candidates.map(c => {
       const cd = candidateMap.get(c.user_id);
@@ -206,12 +242,8 @@ serve(async (req) => {
         if (cd.ikigai.love_text) parts.push(`Loves: ${cd.ikigai.love_text}`);
         if (cd.ikigai.good_at_text) parts.push(`Good at: ${cd.ikigai.good_at_text}`);
       }
-      if (cd?.personality) {
-        const relevant = ["working_style", "stress_response", "communication_style", "commitment_type"];
-        relevant.forEach(k => {
-          if (cd.personality[k]) parts.push(`${k}: ${cd.personality[k]}`);
-        });
-      }
+      const personalitySummary = buildPersonalitySummary(cd?.personality);
+      if (personalitySummary) parts.push(`Personality: ${personalitySummary}`);
 
       const roleLabel = c.domain || cd?.identity?.identity_type || "Professional";
       return {
@@ -236,32 +268,39 @@ serve(async (req) => {
       });
     }
 
-    const scoringPrompt = `You are a strict professional matching AI.
+    const searcherPersonalitySummary = buildPersonalitySummary(searcherPersonality);
+
+    const scoringPrompt = `You are a strict professional matching AI that evaluates both skill fit AND personality alignment.
 
 SEARCHER:
 Name: ${searcherProfile?.name || "Unknown"}
 Query: "${fullQuery}"
 Identity: ${searcherIdentity?.identity_type || "unknown"}, Intent: ${(searcherIdentity?.intent_types || []).join(", ")}
-${searcherPersonality ? `Working style: ${searcherPersonality.working_style || "unknown"}, Communication: ${searcherPersonality.communication_style || "unknown"}` : ""}
+${searcherPersonalitySummary ? `Personality: ${searcherPersonalitySummary}` : "No personality data available."}
 
 QUERY TERMS THAT MUST HAVE EVIDENCE: ${queryTerms.join(", ") || "(none)"}
 
 CANDIDATES:
 ${filteredPool.map((c, i) => `[${i}] ${c.summary}`).join("\n")}
 
-Rules:
-- Return ONLY candidates with clear evidence from their profile summary.
-- Do NOT infer missing skills or roles.
-- If no candidate clearly matches, return an empty array.
-- Compatibility must be <= 40 when evidence is weak.
+SCORING RULES:
+1. COMPATIBILITY (0-100): Primarily based on skills, domain, industry, and role fit relative to the query. This is the primary score.
+2. SUSTAINABILITY (0-100): Based on personality alignment — compare working styles, communication preferences, conflict resolution, trust styles, vision flexibility, commitment consistency, and motivation between searcher and candidate. Similar or complementary styles score higher; clashing styles (e.g., "avoid conflict" vs "direct confrontation") score lower.
+3. When two candidates have similar skill fit, use personality alignment as the tiebreaker for ranking.
+4. Return ONLY candidates with clear evidence from their profile summary for the query.
+5. Do NOT infer missing skills or roles.
+6. If no candidate clearly matches, return an empty array.
+7. Compatibility must be <= 40 when evidence is weak.
+8. In the summary, mention both skill relevance AND any notable personality alignment or friction.
+9. In risks, flag personality clashes (e.g., mismatched communication styles, conflicting work-life priorities).
 
 Return a JSON array where each item has:
 - index (number)
 - compatibility (0-100)
 - sustainability (0-100)
-- summary (1-2 sentences grounded in explicit evidence)
-- strengths (2-3 strings)
-- risks (1-2 items: {type, severity: "Low"|"Medium"|"High", explanation})
+- summary (2-3 sentences: skill fit + personality alignment notes)
+- strengths (2-3 strings, can include personality strengths like "complementary communication styles")
+- risks (1-2 items: {type, severity: "Low"|"Medium"|"High", explanation} — include personality-based risks)
 - starters (2-3 strings)
 
 Return ONLY valid JSON array.`;
