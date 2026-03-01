@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 
 export async function saveIdentity(userId: string, identityType: string, intentTypes: string[]) {
   const { error } = await supabase.from("user_identity").upsert(
