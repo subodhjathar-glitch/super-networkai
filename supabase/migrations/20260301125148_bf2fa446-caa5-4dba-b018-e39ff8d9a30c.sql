@@ -1,0 +1,1 @@
+DELETE FROM public.embeddings WHERE user_id NOT IN (SELECT id FROM auth.users);
