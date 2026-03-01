@@ -16,7 +16,7 @@ const Landing = () => {
           </span>
           <Button
             size="sm"
-            onClick={() => navigate("/onboarding")}
+            onClick={() => navigate("/search")}
             className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-full px-5 text-sm font-sans font-semibold"
           >
             Get Started
@@ -68,7 +68,7 @@ const Landing = () => {
           >
             <Button
               size="lg"
-              onClick={() => navigate("/onboarding")}
+              onClick={() => navigate("/search")}
               className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-full px-10 h-14 text-base font-sans font-semibold"
             >
               Start your journey
@@ -335,7 +335,7 @@ const Landing = () => {
           </p>
           <Button
             size="lg"
-            onClick={() => navigate("/onboarding")}
+            onClick={() => navigate("/search")}
             className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-full px-12 h-14 text-base font-sans font-semibold"
           >
             Begin — it's free

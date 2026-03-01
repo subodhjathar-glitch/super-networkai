@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Search, MessageCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
 import MatchCard from "@/components/MatchCard";
 
 const placeholders = [
@@ -22,7 +23,26 @@ const SearchPage = () => {
   const [showResults, setShowResults] = useState(false);
   const [matches, setMatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (!user) return;
+    const check = async () => {
+      const { data } = await supabase
+        .from("user_identity")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (!data) {
+        navigate("/onboarding", { replace: true });
+      } else {
+        setCheckingOnboarding(false);
+      }
+    };
+    check();
+  }, [user, navigate]);
 
   const getToken = async () => {
     const { data } = await supabase.auth.getSession();
@@ -97,6 +117,14 @@ const SearchPage = () => {
       setShowResults(true);
     }
   };
+
+  if (checkingOnboarding) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
