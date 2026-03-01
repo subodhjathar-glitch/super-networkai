@@ -193,6 +193,34 @@ serve(async (req) => {
       });
     });
 
+    // ── Hard Intent Filtering ──
+    // Only show candidates whose intent overlaps with the searcher's intent.
+    // e.g. searcher wants "cofounder" → candidate must also want "cofounder" or "all"
+    const searcherIntents: string[] = searcherIdentity?.intent_types || [];
+    const searcherWantsAll = searcherIntents.includes("all");
+
+    const intentFilteredCandidateIds = candidateIds.filter(cId => {
+      if (searcherWantsAll) return true; // searcher is open to everything
+      const cIdentity = candidateIdentities?.find(i => i.user_id === cId);
+      if (!cIdentity) return false; // no identity = skip
+      const cIntents: string[] = cIdentity.intent_types || [];
+      if (cIntents.includes("all")) return true; // candidate is open to everything
+      // At least one intent must overlap
+      return searcherIntents.some(si => cIntents.includes(si));
+    });
+
+    if (intentFilteredCandidateIds.length === 0) {
+      return new Response(JSON.stringify({
+        matches: [],
+        noMatchReason: `No profiles found matching your intent. Try broadening your search.`,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Use only intent-filtered candidates going forward
+    const intentFilteredCandidates = candidates.filter(c => intentFilteredCandidateIds.includes(c.user_id));
+
     // Helper to build a personality summary from all fields
     const buildPersonalitySummary = (p: any) => {
       if (!p) return "";
@@ -230,7 +258,7 @@ serve(async (req) => {
     };
 
     // Build candidate summaries and apply strict evidence pre-filter
-    const candidatePool = candidates.map(c => {
+    const candidatePool = intentFilteredCandidates.map(c => {
       const cd = candidateMap.get(c.user_id);
       const parts = [`Name: ${c.name || "Unknown"}`];
       if (c.domain) parts.push(`Domain: ${c.domain}`);
