@@ -1,16 +1,27 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 import IdentityStep from "@/components/onboarding/IdentityStep";
 import type { ProfileData } from "@/components/onboarding/ProfileStep";
 import ProfileStep from "@/components/onboarding/ProfileStep";
 import IkigaiStep from "@/components/onboarding/IkigaiStep";
 import AssessmentStep from "@/components/onboarding/AssessmentStep";
+import {
+  saveIdentity,
+  saveProfile,
+  saveIkigai,
+  savePersonality,
+  triggerEmbeddingGeneration,
+} from "@/lib/onboarding-persist";
 
 const STEPS = ["Identity", "Profile", "Ikigai", "Assessment"];
 
 const Onboarding = () => {
   const [step, setStep] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const { user } = useAuth();
   const [data, setData] = useState<{
     identity: string;
     intent: string;
@@ -37,9 +48,34 @@ const Onboarding = () => {
     setData((prev) => ({ ...prev, ...partial }));
   };
 
-  const next = () => {
-    if (step < STEPS.length - 1) setStep(step + 1);
-    else navigate("/search");
+  const next = async () => {
+    if (!user) return;
+    setSaving(true);
+
+    try {
+      // Save current step data before advancing
+      if (step === 0) {
+        await saveIdentity(user.id, data.identity, [data.intent]);
+      } else if (step === 1) {
+        await saveProfile(user.id, data.profile);
+      } else if (step === 2) {
+        await saveIkigai(user.id, data.ikigai);
+      } else if (step === 3) {
+        await savePersonality(user.id, data.assessmentAnswers);
+        // Final step: trigger embedding generation and navigate
+        triggerEmbeddingGeneration().catch(console.error);
+        toast.success("Profile complete! Finding your matches...");
+        navigate("/search");
+        return;
+      }
+
+      setStep(step + 1);
+    } catch (err: any) {
+      console.error("Save error:", err);
+      toast.error("Failed to save. Please try again.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const back = () => {
@@ -120,6 +156,16 @@ const Onboarding = () => {
           </AnimatePresence>
         </div>
       </div>
+
+      {/* Saving overlay */}
+      {saving && (
+        <div className="fixed inset-0 bg-background/50 backdrop-blur-sm z-[100] flex items-center justify-center">
+          <div className="bg-card border border-border rounded-xl p-6 shadow-elevated text-center">
+            <div className="animate-spin w-8 h-8 border-2 border-accent border-t-transparent rounded-full mx-auto mb-3" />
+            <p className="text-foreground font-medium">Saving...</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
