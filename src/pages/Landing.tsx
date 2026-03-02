@@ -1,10 +1,12 @@
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Landing = () => {
   const navigate = useNavigate();
+  const { user, signOut } = useAuth();
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-hidden">
@@ -21,6 +23,17 @@ const Landing = () => {
           >
             Get Started
           </Button>
+          {user && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={async () => { await signOut(); navigate("/"); }}
+              className="text-muted-foreground hover:text-destructive"
+            >
+              <LogOut className="w-4 h-4 mr-1" />
+              Log out
+            </Button>
+          )}
         </div>
       </nav>
 

@@ -1,4 +1,6 @@
 import { useEffect, useState, useRef } from "react";
+import { LogOut } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -23,7 +25,7 @@ const Onboarding = () => {
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [initializing, setInitializing] = useState(true);
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const [data, setData] = useState<{
     identity: string;
     intent: string;
@@ -215,9 +217,20 @@ const Onboarding = () => {
             <span className="text-sm font-medium text-foreground font-display">
               {STEPS[step]}
             </span>
-            <span className="text-xs text-muted-foreground">
-              Step {step + 1} of {STEPS.length}
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted-foreground">
+                Step {step + 1} of {STEPS.length}
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={async () => { await signOut(); navigate("/"); }}
+                className="text-muted-foreground hover:text-destructive h-7 px-2 text-xs"
+              >
+                <LogOut className="w-3.5 h-3.5 mr-1" />
+                Log out
+              </Button>
+            </div>
           </div>
           <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
             <motion.div
