@@ -305,63 +305,107 @@ serve(async (req) => {
     // ── PRD Req 4 & 5: Risk Simulation Prompt ──
     const scoringPrompt = `You are a strict structured data processor. Use ONLY the information provided. Do not infer, assume, or invent any data not explicitly present in the input.
 
-SEARCHER PROFILE:
+SEARCHER PROFILE (Person A — the one searching):
 ${JSON.stringify(searcherJSON, null, 2)}
 
 QUERY: "${fullQuery}"
 MANDATORY TERMS: ${queryTerms.join(", ") || "(none)"}
 
-CANDIDATES:
+CANDIDATES (Person B — potential matches):
 ${JSON.stringify(candidatesJSON, null, 2)}
 
-SCORING RULES (PRD v3.0):
+SCORING RULES (PRD v3.0 — Strict Weighted Scoring):
 
-1. COMPATIBILITY SCORE (0-100) - Today's Fit:
-   - Skill Complementarity (30%): Overlap + gap analysis
-   - Vision & Mission (25%): Ikigai summary + long_term_vision
-   - Industry Alignment (20%): Industries match
-   - Commitment Compatibility (15%): commitment_type + financial_runway
-   - Working Style Fit (10%): decision_speed + communication_style
+1. COMPATIBILITY SCORE (0-100) — Today's Fit:
+   - Skill Complementarity (30%): Analyse overlap AND gap-fill between Person A and Person B's core_skills. Complementary skills (A has what B lacks and vice versa) score higher than identical skills.
+   - Vision & Mission Alignment (25%): Compare ikigai_summary, long_term_vision, and love/passion areas. Do they share a common purpose? Would they inspire each other?
+   - Industry Alignment (20%): Do their industries overlap or naturally complement each other (e.g., HealthTech + AI)?
+   - Commitment Compatibility (15%): Compare commitment_type and financial_runway. A full-time founder with 12+ months runway paired with a part-time contributor with <3 months is a mismatch.
+   - Working Style Fit (10%): Compare decision_speed, communication_style, and working_style preferences.
 
-2. SUSTAINABILITY SCORE (0-100) - Long-term Health:
-   - Mission Priority (35%): Compare mission_priority (brand_first/self_first/balanced)
-   - Conflict Style (25%): Compare conflict_style + detail
-   - Recognition Style (20%): Compare recognition_style + detail
-   - Commitment Consistency (20%): commitment_consistency + work_life_balance
+2. SUSTAINABILITY SCORE (0-100) — Long-term Partnership Health:
+   - Mission Priority Alignment (35%): Compare mission_priority values. If one is "mission_first" and the other's step_back_reason suggests self-interest, flag it. Include mission_priority_detail in analysis.
+   - Conflict Style Compatibility (25%): Compare conflict_style + conflict_detail. "Direct and immediate" paired with "gradually over time" creates friction — explain why and whether it's manageable.
+   - Recognition Style Match (20%): Compare recognition_style + recognition_detail. Misaligned recognition needs (one wants public praise, other finds it uncomfortable) cause long-term resentment.
+   - Commitment Consistency (20%): Compare commitment_consistency + work_life_balance. Do they have compatible views on handling uneven workloads and personal boundaries?
 
-3. RULES:
+3. SUMMARY REQUIREMENTS:
+   - Write 4-6 sentences that tell a STORY about this potential partnership. 
+   - Sentence 1: Who this person is and their core strength relative to the searcher's needs.
+   - Sentence 2-3: Specific skill and vision alignment — reference actual skills, industries, and ikigai themes from their profiles.
+   - Sentence 4-5: Personality and working style dynamics — how their communication, conflict, and decision-making styles would interact day-to-day.
+   - Sentence 6: An honest assessment of the partnership's long-term potential, including any areas to explore.
+   - Be specific — use actual data from the profiles, not generic statements.
+
+4. PERSONALITY ALIGNMENT:
+   - Analyse ALL of these dimensions with specific evidence from both profiles:
+     * Communication Style: Compare daily/async/on-demand preferences and communication_depth
+     * Conflict Resolution: Compare how each handles disagreements (direct vs gradual vs mediator)
+     * Work-Life Balance: Compare boundaries and expectations around personal time
+     * Decision Making: Compare decision_speed and decision_structure preferences
+     * Trust & Vulnerability: Compare trust_style and how they build trust
+     * Stress Response: Compare how each handles pressure and uncertainty
+     * Recognition & Motivation: Compare what drives each person and how they want to be acknowledged
+   - For each dimension, explain WHY it's good/neutral/friction with specific references to their answers.
+
+5. STRENGTHS:
+   - List 4-6 specific, evidence-based strengths (not generic).
+   - Example good: "Both prioritise async communication — reduces meeting overhead"
+   - Example bad: "Good communication" (too vague)
+
+6. RISKS:
+   - Identify 2-4 specific risks with constructive, diplomatic language.
+   - Each risk must reference specific profile data.
+   - Severity: "Low" (minor friction, easily resolved), "Medium" (worth discussing early), "High" (potential dealbreaker if not addressed).
+   - Language rules: NEVER use "ego", "dominant", "controlling". USE: "worth discussing", "may benefit from aligning on", "consider exploring".
+
+7. CONVERSATION STARTERS:
+   - Generate 4-5 specific, thoughtful conversation starters.
+   - Each should address a specific alignment area or risk, making it easy to explore compatibility naturally.
+   - Make them feel like genuine questions a smart person would ask, not interview questions.
+
+8. RULES:
    - Return ONLY candidates with clear evidence for the query.
    - Compatibility must be <= 40 if evidence is weak.
-   - If skill fit is similar, use Sustainability as tiebreaker.
-   - Language: No "ego", "dominant", "controlling". Use "worth discussing", "may benefit from aligning on", "consider exploring".
+   - If skill fit is similar between candidates, use Sustainability as tiebreaker.
    - Risk Severity: "Low", "Medium", "High" only.
+   - ALL text must be grounded in actual profile data — do not invent traits or experiences not present in the input.
 
-OUTPUT FORMAT (JSON Array):
-[
-  {
-    "user_id": "uuid",
-    "compatibility": number,
-    "sustainability": number,
-    "summary": "2 sentences blending skill fit + personality note",
-    "strengths": ["string", "string", "string"],
-    "risks": [{"type": "string", "severity": "Low|Medium|High", "explanation": "string"}],
-    "starters": ["string", "string", "string"], // Based on identified risks or shared interests
-    "personality_alignment": [ // New field for UI
-       {"dimension": "Communication", "match": "good|neutral|friction", "detail": "Both prefer async"},
-       {"dimension": "Conflict", "match": "good|neutral|friction", "detail": "Direct vs Avoidant"},
-       {"dimension": "Work-Life", "match": "good|neutral|friction", "detail": "Aligned on balance"}
-    ]
-  }
-]`;
+OUTPUT FORMAT (JSON — must be a valid JSON object with a "matches" key):
+{
+  "matches": [
+    {
+      "user_id": "uuid",
+      "compatibility": number,
+      "sustainability": number,
+      "summary": "4-6 detailed sentences as described above",
+      "strengths": ["specific strength 1", "specific strength 2", "specific strength 3", "specific strength 4"],
+      "risks": [{"type": "string", "severity": "Low|Medium|High", "explanation": "specific explanation referencing profile data"}],
+      "starters": ["thoughtful question 1", "thoughtful question 2", "thoughtful question 3", "thoughtful question 4"],
+      "personality_alignment": [
+        {"dimension": "Communication Style", "match": "good|neutral|friction", "detail": "Specific comparison with evidence"},
+        {"dimension": "Conflict Resolution", "match": "good|neutral|friction", "detail": "Specific comparison with evidence"},
+        {"dimension": "Work-Life Balance", "match": "good|neutral|friction", "detail": "Specific comparison with evidence"},
+        {"dimension": "Decision Making", "match": "good|neutral|friction", "detail": "Specific comparison with evidence"},
+        {"dimension": "Trust & Vulnerability", "match": "good|neutral|friction", "detail": "Specific comparison with evidence"},
+        {"dimension": "Stress Response", "match": "good|neutral|friction", "detail": "Specific comparison with evidence"},
+        {"dimension": "Recognition & Motivation", "match": "good|neutral|friction", "detail": "Specific comparison with evidence"}
+      ]
+    }
+  ]
+}`;
 
     const scoringRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${GROQ_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: "llama-3.3-70b-versatile",
-        messages: [{ role: "user", content: scoringPrompt }],
-        max_tokens: 4000,
-        temperature: 0.1, // PRD Req 6
+        messages: [
+          { role: "system", content: "You are a strict structured data processor. Use ONLY the information provided. Do not infer, assume, or invent any data not explicitly present in the input. Return valid JSON only." },
+          { role: "user", content: scoringPrompt }
+        ],
+        max_tokens: 8000,
+        temperature: 0.1,
         response_format: { type: "json_object" }
       }),
     });
