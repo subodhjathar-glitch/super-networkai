@@ -68,14 +68,47 @@ export async function saveIkigai(userId: string, ikigai: {
   }
 }
 
+// Whitelist of valid personality DB columns to prevent unknown-column errors
+const PERSONALITY_COLUMNS = new Set([
+  "working_style", "working_style_other", "working_style_detail",
+  "stress_response", "stress_response_other",
+  "recognition_style", "recognition_style_other",
+  "communication_style", "communication_depth", "communication_rhythm",
+  "conflict_style", "conflict_detail",
+  "trust_style", "trust_style_other", "trust_style_detail",
+  "work_life_balance", "work_life_balance_other",
+  "mission_priority", "mission_priority_other", "mission_priority_detail",
+  "vision_flexibility", "vision_flexibility_other", "vision_flexibility_detail",
+  "decision_structure", "decision_speed",
+  "commitment_type", "commitment_consistency", "commitment_consistency_other",
+  "financial_runway", "long_term_vision",
+  "equity_expectations", "equity_expectations_other",
+  "past_collaboration", "past_collab_exp",
+  "ownership_style",
+  "feedback_style", "feedback_style_other", "feedback_style_detail",
+  "leadership_pref", "leadership_pref_other",
+  "autonomy_level",
+  "adaptability", "adaptability_other",
+  "motivation_style", "motivation_style_other",
+  "assertiveness", "assertiveness_other",
+  "ideal_environment", "startup_readiness",
+  "dealbreakers", "non_negotiables",
+  "involvement_pref", "relationship_style",
+  "scope_clarity",
+  "budget_philosophy", "budget_philosophy_other",
+  "timeline_style", "success_criteria",
+  "step_back_reason",
+]);
+
 export async function savePersonality(userId: string, answers: Record<string, any>) {
   // Filter out internal keys
   const { _intent, ...rest } = answers;
   
   const payload: Record<string, any> = { user_id: userId };
   
-  // Map answer keys to personality columns
+  // Only include keys that are valid DB columns
   for (const [key, value] of Object.entries(rest)) {
+    if (!PERSONALITY_COLUMNS.has(key)) continue;
     if (value !== undefined && value !== "") {
       if (Array.isArray(value)) {
         payload[key] = value;
