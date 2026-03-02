@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -86,12 +86,10 @@ const Onboarding = () => {
           ...personalityAnswers
         } = personalityRaw;
 
-        setData((prev) => ({
-          ...prev,
-          identity: identityRes.data?.identity_type || prev.identity,
-          intent: identityRes.data?.intent_types?.[0] || prev.intent,
+        const loadedData = {
+          identity: identityRes.data?.identity_type || "",
+          intent: identityRes.data?.intent_types?.[0] || "",
           profile: {
-            ...prev.profile,
             name: profileRes.data?.name || "",
             location_country: profileRes.data?.location_country || "",
             location_city: profileRes.data?.location_city || "",
@@ -111,7 +109,40 @@ const Onboarding = () => {
             livelihood: ikigaiRes.data?.livelihood_text || "",
           },
           assessmentAnswers: personalityAnswers,
-        }));
+        };
+
+        setData((prev) => ({ ...prev, ...loadedData }));
+
+        // Auto-resume at the first incomplete step
+        const hasIdentity = !!(loadedData.identity && loadedData.intent);
+        const hasProfile = !!(
+          loadedData.profile.name.trim() &&
+          (loadedData.profile.location_country || loadedData.profile.location_city) &&
+          (loadedData.profile.industries.length > 0 || loadedData.profile.industry_other.trim()) &&
+          loadedData.profile.skills.length > 0 &&
+          loadedData.profile.cvUploaded
+        );
+        const MIN_IKIGAI = 20;
+        const hasIkigai = !!(
+          loadedData.ikigai.love.trim().length >= MIN_IKIGAI &&
+          loadedData.ikigai.good.trim().length >= MIN_IKIGAI &&
+          loadedData.ikigai.world.trim().length >= MIN_IKIGAI &&
+          loadedData.ikigai.livelihood.trim().length >= MIN_IKIGAI
+        );
+        const hasPersonality = !!(
+          personalityAnswers.working_style &&
+          personalityAnswers.stress_response &&
+          personalityAnswers.communication_style
+        );
+
+        let resumeStep = 0;
+        if (hasIdentity) resumeStep = 1;
+        if (hasIdentity && hasProfile) resumeStep = 2;
+        if (hasIdentity && hasProfile && hasIkigai) resumeStep = 3;
+        // If everything is complete, still show step 3 so they can review or proceed
+        if (hasIdentity && hasProfile && hasIkigai && hasPersonality) resumeStep = 3;
+
+        setStep(resumeStep);
       } catch (error) {
         console.error("Failed to load existing onboarding data", error);
       } finally {
