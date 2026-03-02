@@ -421,13 +421,40 @@ OUTPUT FORMAT (JSON — must be a valid JSON object with a "matches" key):
     let matchScores: any[] = [];
     try {
       const content = scoringData.choices?.[0]?.message?.content || "[]";
-      // Handle potential wrapping key
       const parsed = JSON.parse(content);
       matchScores = Array.isArray(parsed) ? parsed : (parsed.matches || parsed.candidates || []);
     } catch (e) {
-      console.error("JSON parse error:", e);
-      // PRD Req 7: Auto-repair could go here, for now return empty to avoid crash
-      matchScores = [];
+      console.error("JSON parse error, attempting repair:", e);
+      
+      // PRD Req 7: JSON auto-repair prompt
+      const rawContent = scoringData.choices?.[0]?.message?.content || "";
+      try {
+        const repairRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${GROQ_API_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "llama-3.3-70b-versatile",
+            messages: [
+              { role: "system", content: "You are a JSON repair tool. Fix the following malformed JSON and return ONLY valid JSON. Do not add any text before or after the JSON." },
+              { role: "user", content: `Fix this JSON:\n${rawContent}` }
+            ],
+            max_tokens: 8000,
+            temperature: 0.0,
+            response_format: { type: "json_object" }
+          }),
+        });
+
+        if (repairRes.ok) {
+          const repairData = await repairRes.json();
+          const repairedContent = repairData.choices?.[0]?.message?.content || "[]";
+          const repairedParsed = JSON.parse(repairedContent);
+          matchScores = Array.isArray(repairedParsed) ? repairedParsed : (repairedParsed.matches || repairedParsed.candidates || []);
+          console.log("JSON repair succeeded");
+        }
+      } catch (repairErr) {
+        console.error("JSON repair also failed:", repairErr);
+        matchScores = [];
+      }
     }
 
     // Join scores with profile data
