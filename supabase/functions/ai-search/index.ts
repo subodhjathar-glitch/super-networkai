@@ -231,54 +231,6 @@ serve(async (req) => {
       return { user_id: c.user_id, ...buildCompactProfileJSON(data.profile, data.identity, data.personality, data.ikigai) };
     });
 
-    const scoreFallbackMatches = (candidates: any[]) => {
-      const searcherSkillsNorm = (searcherProfile?.core_skills || []).map((s: string) => normalizeText(s));
-      const searcherIndustriesNorm = (searcherProfile?.industries || []).map((i: string) => normalizeText(i));
-      const searcherCountry = normalizeLC(searcherProfile?.location_country || "");
-
-      return candidates
-        .map((candidate: any) => {
-          const candidateSkills = (candidate.core_skills || []).map((s: string) => normalizeText(s));
-          const candidateIndustries = (candidate.industries || []).map((i: string) => normalizeText(i));
-          const skillOverlap = candidateSkills.filter((cs: string) => searcherSkillsNorm.includes(cs)).length;
-          const industryOverlap = candidateIndustries.filter((ci: string) => searcherIndustriesNorm.includes(ci)).length;
-          const sameCountry = searcherCountry && normalizeLC(candidate.location_country) === searcherCountry;
-
-          const compatibility = Math.min(95, 45 + skillOverlap * 15 + industryOverlap * 20 + (sameCountry ? 10 : 0));
-          const sustainability = Math.min(90, 50 + industryOverlap * 15 + (sameCountry ? 10 : 0));
-
-          return {
-            user_id: candidate.user_id,
-            compatibility,
-            sustainability,
-            summary: "Strong potential based on profile alignment. AI deep scoring is temporarily unavailable, so this ranking is based on industry, skills, and location fit.",
-            strengths: [
-              "Industry alignment",
-              "Skill relevance",
-              "Location compatibility",
-              "Intent-level fit",
-            ],
-            risks: [
-              { type: "limited_ai_analysis", severity: "Medium", explanation: "Detailed conversational and personality analysis is temporarily unavailable." },
-            ],
-            starters: [
-              "What outcome are you targeting in the next 90 days?",
-              "What kind of collaboration rhythm works best for you?",
-              "Which responsibilities are you most excited to own?",
-              "What does a successful partnership look like for you?",
-            ],
-            name: candidate.name || "Unknown",
-            role: candidateMap.get(candidate.user_id)?.identity?.identity_type || "Professional",
-            location: [candidate.location_city, candidate.location_country].filter(Boolean).join(", "),
-            matchType: primaryFinalIds.has(candidate.user_id) ? "primary" : "secondary",
-          };
-        })
-        .sort((a: any, b: any) => {
-          if (a.matchType !== b.matchType) return a.matchType === "primary" ? -1 : 1;
-          return b.compatibility - a.compatibility;
-        })
-        .slice(0, 40);
-    };
 
     const searchContext = [
       industries.length > 0 ? `Industries: ${industries.join(", ")}` : "",
@@ -372,8 +324,7 @@ OUTPUT FORMAT (JSON):
 
     if (!scoringRes.ok) {
       console.error("Groq scoring error:", await scoringRes.text());
-      const fallbackMatches = scoreFallbackMatches(finalCandidates);
-      return new Response(JSON.stringify({ matches: fallbackMatches, fallback: true }), {
+      return new Response(JSON.stringify({ matches: [], noMatchReason: "AI scoring temporarily unavailable. Please try again in a moment." }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -413,8 +364,7 @@ OUTPUT FORMAT (JSON):
     }
 
     if (!Array.isArray(matchScores) || matchScores.length === 0) {
-      const fallbackMatches = scoreFallbackMatches(finalCandidates);
-      return new Response(JSON.stringify({ matches: fallbackMatches, fallback: true }), {
+      return new Response(JSON.stringify({ matches: [], noMatchReason: "No matches found for your criteria." }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
