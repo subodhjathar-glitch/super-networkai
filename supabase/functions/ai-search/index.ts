@@ -196,85 +196,89 @@ serve(async (req) => {
     const primaryFinalIds = new Set(primaryFinal.map((c: any) => c.user_id));
 
 
-    // ── Step 3: AI Scoring ──
-    const buildFullProfileJSON = (profile: any, identity: any, personality: any, ikigai: any) => ({
+    // ── Step 3: AI Scoring (with deterministic fallback) ──
+    const buildCompactProfileJSON = (profile: any, identity: any, personality: any, ikigai: any) => ({
       name: profile?.name,
       role: identity?.identity_type,
       intent: identity?.intent_types,
-      location: `${profile?.location_city || ""}, ${profile?.location_country || ""}`,
+      location_country: profile?.location_country,
+      location_city: profile?.location_city,
       skills: profile?.core_skills,
-      domain: profile?.domain,
       industries: profile?.industries,
-      // Ikigai
+      ikigai_summary: ikigai?.ai_summary,
       ikigai_love: ikigai?.love_text,
       ikigai_good_at: ikigai?.good_at_text,
       ikigai_world_needs: ikigai?.world_needs_text,
       ikigai_livelihood: ikigai?.livelihood_text,
-      ikigai_summary: ikigai?.ai_summary,
-      // All personality fields
       working_style: personality?.working_style,
-      working_style_other: personality?.working_style_other,
-      working_style_detail: personality?.working_style_detail,
-      stress_response: personality?.stress_response,
-      stress_response_other: personality?.stress_response_other,
-      recognition_style: personality?.recognition_style,
-      recognition_style_other: personality?.recognition_style_other,
       communication_style: personality?.communication_style,
-      communication_depth: personality?.communication_depth,
-      communication_rhythm: personality?.communication_rhythm,
       conflict_style: personality?.conflict_style,
-      conflict_detail: personality?.conflict_detail,
       trust_style: personality?.trust_style,
-      trust_style_other: personality?.trust_style_other,
-      trust_style_detail: personality?.trust_style_detail,
-      work_life_balance: personality?.work_life_balance,
-      work_life_balance_other: personality?.work_life_balance_other,
       mission_priority: personality?.mission_priority,
-      mission_priority_detail: personality?.mission_priority_detail,
-      vision_flexibility: personality?.vision_flexibility,
-      vision_flexibility_other: personality?.vision_flexibility_other,
-      vision_flexibility_detail: personality?.vision_flexibility_detail,
-      decision_structure: personality?.decision_structure,
-      decision_speed: personality?.decision_speed,
       commitment_type: personality?.commitment_type,
       commitment_consistency: personality?.commitment_consistency,
-      commitment_consistency_other: personality?.commitment_consistency_other,
       financial_runway: personality?.financial_runway,
-      long_term_vision: personality?.long_term_vision,
-      equity_expectations: personality?.equity_expectations,
-      equity_expectations_other: personality?.equity_expectations_other,
-      past_collaboration: personality?.past_collaboration,
-      past_collab_exp: personality?.past_collab_exp,
-      ownership_style: personality?.ownership_style,
-      feedback_style: personality?.feedback_style,
-      feedback_style_other: personality?.feedback_style_other,
-      feedback_style_detail: personality?.feedback_style_detail,
-      leadership_pref: personality?.leadership_pref,
-      autonomy_level: personality?.autonomy_level,
-      adaptability: personality?.adaptability,
-      adaptability_other: personality?.adaptability_other,
-      motivation_style: personality?.motivation_style,
-      motivation_style_other: personality?.motivation_style_other,
-      assertiveness: personality?.assertiveness,
-      assertiveness_other: personality?.assertiveness_other,
-      ideal_environment: personality?.ideal_environment,
-      startup_readiness: personality?.startup_readiness,
-      dealbreakers: personality?.dealbreakers,
-      non_negotiables: personality?.non_negotiables,
-      involvement_pref: personality?.involvement_pref,
-      relationship_style: personality?.relationship_style,
-      scope_clarity: personality?.scope_clarity,
-      budget_philosophy: personality?.budget_philosophy,
-      timeline_style: personality?.timeline_style,
-      success_criteria: personality?.success_criteria,
-      step_back_reason: personality?.step_back_reason,
+      recognition_style: personality?.recognition_style,
+      work_life_balance: personality?.work_life_balance,
+      decision_speed: personality?.decision_speed,
+      decision_structure: personality?.decision_structure,
     });
 
-    const searcherJSON = buildFullProfileJSON(searcherProfile, searcherIdentity, searcherPersonality, searcherIkigai);
-    const candidatesJSON = finalCandidates.map((c: any) => {
+    const searcherJSON = buildCompactProfileJSON(searcherProfile, searcherIdentity, searcherPersonality, searcherIkigai);
+    const scoredCandidates = finalCandidates.slice(0, 12);
+    const candidatesJSON = scoredCandidates.map((c: any) => {
       const data = candidateMap.get(c.user_id);
-      return { user_id: c.user_id, ...buildFullProfileJSON(data.profile, data.identity, data.personality, data.ikigai) };
+      return { user_id: c.user_id, ...buildCompactProfileJSON(data.profile, data.identity, data.personality, data.ikigai) };
     });
+
+    const scoreFallbackMatches = (candidates: any[]) => {
+      const searcherSkillsNorm = (searcherProfile?.core_skills || []).map((s: string) => normalizeText(s));
+      const searcherIndustriesNorm = (searcherProfile?.industries || []).map((i: string) => normalizeText(i));
+      const searcherCountry = normalizeLC(searcherProfile?.location_country || "");
+
+      return candidates
+        .map((candidate: any) => {
+          const candidateSkills = (candidate.core_skills || []).map((s: string) => normalizeText(s));
+          const candidateIndustries = (candidate.industries || []).map((i: string) => normalizeText(i));
+          const skillOverlap = candidateSkills.filter((cs: string) => searcherSkillsNorm.includes(cs)).length;
+          const industryOverlap = candidateIndustries.filter((ci: string) => searcherIndustriesNorm.includes(ci)).length;
+          const sameCountry = searcherCountry && normalizeLC(candidate.location_country) === searcherCountry;
+
+          const compatibility = Math.min(95, 45 + skillOverlap * 15 + industryOverlap * 20 + (sameCountry ? 10 : 0));
+          const sustainability = Math.min(90, 50 + industryOverlap * 15 + (sameCountry ? 10 : 0));
+
+          return {
+            user_id: candidate.user_id,
+            compatibility,
+            sustainability,
+            summary: "Strong potential based on profile alignment. AI deep scoring is temporarily unavailable, so this ranking is based on industry, skills, and location fit.",
+            strengths: [
+              "Industry alignment",
+              "Skill relevance",
+              "Location compatibility",
+              "Intent-level fit",
+            ],
+            risks: [
+              { type: "limited_ai_analysis", severity: "Medium", explanation: "Detailed conversational and personality analysis is temporarily unavailable." },
+            ],
+            starters: [
+              "What outcome are you targeting in the next 90 days?",
+              "What kind of collaboration rhythm works best for you?",
+              "Which responsibilities are you most excited to own?",
+              "What does a successful partnership look like for you?",
+            ],
+            name: candidate.name || "Unknown",
+            role: candidateMap.get(candidate.user_id)?.identity?.identity_type || "Professional",
+            location: [candidate.location_city, candidate.location_country].filter(Boolean).join(", "),
+            matchType: primaryFinalIds.has(candidate.user_id) ? "primary" : "secondary",
+          };
+        })
+        .sort((a: any, b: any) => {
+          if (a.matchType !== b.matchType) return a.matchType === "primary" ? -1 : 1;
+          return b.compatibility - a.compatibility;
+        })
+        .slice(0, 40);
+    };
 
     const searchContext = [
       industries.length > 0 ? `Industries: ${industries.join(", ")}` : "",
@@ -368,7 +372,8 @@ OUTPUT FORMAT (JSON):
 
     if (!scoringRes.ok) {
       console.error("Groq scoring error:", await scoringRes.text());
-      return new Response(JSON.stringify({ matches: [] }), {
+      const fallbackMatches = scoreFallbackMatches(finalCandidates);
+      return new Response(JSON.stringify({ matches: fallbackMatches, fallback: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -405,6 +410,13 @@ OUTPUT FORMAT (JSON):
       } catch {
         matchScores = [];
       }
+    }
+
+    if (!Array.isArray(matchScores) || matchScores.length === 0) {
+      const fallbackMatches = scoreFallbackMatches(finalCandidates);
+      return new Response(JSON.stringify({ matches: fallbackMatches, fallback: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Join scores with profile data
