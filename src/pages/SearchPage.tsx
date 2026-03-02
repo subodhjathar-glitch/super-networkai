@@ -420,9 +420,6 @@ const SearchPage = () => {
               animate={{ opacity: 1 }}
               className="space-y-6"
             >
-              <p className="text-sm text-muted-foreground">
-                {matches.length} matches found — ranked by compatibility and sustainability
-              </p>
               {matches.length === 0 && (
                 <div className="text-center py-12">
                   <p className="text-muted-foreground text-lg">No exact matches found.</p>
@@ -431,16 +428,68 @@ const SearchPage = () => {
                   </p>
                 </div>
               )}
-              {matches.map((match, i) => (
-                <motion.div
-                  key={match.name + i}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.15 }}
-                >
-                  <MatchCard match={match} />
-                </motion.div>
-              ))}
+
+              {/* Primary matches — what they're looking for */}
+              {matches.filter((m: any) => m.matchType === "primary").length > 0 && (
+                <>
+                  <p className="text-sm font-medium text-foreground">
+                    🎯 Matches for your search — {matches.filter((m: any) => m.matchType === "primary").length} found
+                  </p>
+                  {matches.filter((m: any) => m.matchType === "primary").map((match: any, i: number) => (
+                    <motion.div
+                      key={match.name + i}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.15 }}
+                    >
+                      <MatchCard match={match} />
+                    </motion.div>
+                  ))}
+                </>
+              )}
+
+              {/* Secondary matches — based on their own profile */}
+              {matches.filter((m: any) => m.matchType === "secondary").length > 0 && (
+                <>
+                  <div className="border-t border-border pt-6 mt-6">
+                    <p className="text-sm font-medium text-foreground mb-1">
+                      💡 You might also be interested in
+                    </p>
+                    <p className="text-xs text-muted-foreground mb-4">
+                      Based on your own profile and skills
+                    </p>
+                  </div>
+                  {matches.filter((m: any) => m.matchType === "secondary").map((match: any, i: number) => (
+                    <motion.div
+                      key={match.name + "sec" + i}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.15 }}
+                    >
+                      <MatchCard match={match} />
+                    </motion.div>
+                  ))}
+                </>
+              )}
+
+              {/* If all matches lack matchType (legacy), show flat list */}
+              {matches.length > 0 && !matches.some((m: any) => m.matchType) && (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    {matches.length} matches found — ranked by compatibility
+                  </p>
+                  {matches.map((match: any, i: number) => (
+                    <motion.div
+                      key={match.name + i}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.15 }}
+                    >
+                      <MatchCard match={match} />
+                    </motion.div>
+                  ))}
+                </>
+              )}
             </motion.div>
           )}
         </div>

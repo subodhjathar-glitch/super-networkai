@@ -57,7 +57,7 @@ serve(async (req) => {
     const { data: blocks } = await supabase.from("blocks").select("blocked_id").eq("blocker_id", userId);
     const blockedIds = (blocks || []).map((b: any) => b.blocked_id);
 
-    // ── Step 1: DB-level pre-filtering by industry & skills ──
+    // ── Step 1: DB-level pre-filtering ──
     const industries: string[] = filterIndustries || [];
     const skills: string[] = filterSkills || [];
     const normalizeLC = (s: string | null) => (s || "").toLowerCase().trim();
@@ -81,11 +81,12 @@ serve(async (req) => {
       });
     }
 
-    // Filter by industry overlap
-    let filtered = allCandidates;
+    // ── Primary pool: exact filter matches (what the searcher is LOOKING FOR) ──
+    let primaryPool = [...allCandidates];
+
     if (industries.length > 0) {
       const industryNorm = industries.map((i) => normalizeText(i));
-      filtered = filtered.filter((c: any) => {
+      primaryPool = primaryPool.filter((c: any) => {
         const cIndustries = (c.industries || []).map((i: string) => normalizeText(i));
         const cIndustryOther = normalizeText(c.industry_other || "");
         return industryNorm.some(
@@ -94,45 +95,63 @@ serve(async (req) => {
       });
     }
 
-    // Filter by skills overlap (strict — no fallback)
     if (skills.length > 0) {
       const skillsNorm = skills.map((s) => normalizeText(s));
-      filtered = filtered.filter((c: any) => {
+      primaryPool = primaryPool.filter((c: any) => {
         const cSkills = (c.core_skills || []).map((s: string) => normalizeText(s));
         return skillsNorm.some((ss) => cSkills.some((cs: string) => cs.includes(ss) || ss.includes(cs)));
       });
     }
 
-    // Location filtering
     if (prefCountry || prefCity) {
       const pCountry = normalizeLC(prefCountry);
       const pCity = normalizeLC(prefCity);
-      const locationFiltered = filtered.filter((c: any) => {
+      const locationFiltered = primaryPool.filter((c: any) => {
         const cCountry = normalizeLC(c.location_country);
         const cCity = normalizeLC(c.location_city);
         if (pCountry && cCountry !== pCountry) return false;
         if (pCity && !cCity.includes(pCity) && !pCity.includes(cCity)) return false;
         return true;
       });
-      // Location is a soft filter — keep results if location removes all
-      if (locationFiltered.length > 0) filtered = locationFiltered;
+      if (locationFiltered.length > 0) primaryPool = locationFiltered;
     }
 
-    if (filtered.length === 0) {
+    // ── Secondary pool: matches based on searcher's OWN profile (what they ARE) ──
+    const primaryIds = new Set(primaryPool.map((c: any) => c.user_id));
+    const searcherIndustries = (searcherProfile?.industries || []).map((i: string) => normalizeText(i));
+    const searcherSkills = (searcherProfile?.core_skills || []).map((s: string) => normalizeText(s));
+
+    let secondaryPool = allCandidates.filter((c: any) => {
+      if (primaryIds.has(c.user_id)) return false; // exclude already in primary
+      const cIndustries = (c.industries || []).map((i: string) => normalizeText(i));
+      const cSkills = (c.core_skills || []).map((s: string) => normalizeText(s));
+      const industryOverlap = searcherIndustries.some((si: string) =>
+        cIndustries.some((ci: string) => ci.includes(si) || si.includes(ci))
+      );
+      const skillOverlap = searcherSkills.some((ss: string) =>
+        cSkills.some((cs: string) => cs.includes(ss) || ss.includes(cs))
+      );
+      return industryOverlap || skillOverlap;
+    });
+
+    // Combine both pools for enrichment
+    const combinedPool = [...primaryPool, ...secondaryPool];
+
+    if (combinedPool.length === 0) {
       return new Response(JSON.stringify({
         matches: [],
-        noMatchReason: "No profiles match your selected filters. Try broadening your industry or skill selection.",
+        noMatchReason: "No profiles match your filters or your profile. Try broadening your selection.",
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // ── Step 2: Intent pre-filter ──
-    const workingCandidateIds = filtered.map((c: any) => c.user_id);
+    // ── Step 2: Intent pre-filter on combined pool ──
+    const workingCandidateIds = combinedPool.map((c: any) => c.user_id);
     const { data: candidateIdentities } = await supabase.from("user_identity").select("*").in("user_id", workingCandidateIds);
     const { data: candidatePersonalities } = await supabase.from("personality").select("*").in("user_id", workingCandidateIds);
     const { data: candidateIkigais } = await supabase.from("ikigai").select("*").in("user_id", workingCandidateIds);
 
     const candidateMap = new Map();
-    filtered.forEach((c: any) => {
+    combinedPool.forEach((c: any) => {
       candidateMap.set(c.user_id, {
         profile: c,
         identity: candidateIdentities?.find((i: any) => i.user_id === c.user_id),
@@ -146,10 +165,9 @@ serve(async (req) => {
     const searcherIsFounder = searcherIdentity?.identity_type === "founder";
     const searcherSeekingCofounder = searcherIntents.includes("cofounder");
 
-    const intentFiltered = filtered.filter((c: any) => {
+    const applyIntentFilter = (pool: any[]) => pool.filter((c: any) => {
       const cIdentity = candidateIdentities?.find((i: any) => i.user_id === c.user_id);
       if (!cIdentity) return false;
-
       if (searcherIsFounder && searcherSeekingCofounder) {
         const isFounder = cIdentity.identity_type === "founder";
         const seeksCofounder = (cIdentity.intent_types || []).includes("cofounder");
@@ -157,22 +175,26 @@ serve(async (req) => {
         if (isFounder && (seeksCofounder || seeksAll)) return true;
         if (!searcherWantsAll) return false;
       }
-
       if (searcherWantsAll) return true;
       const cIntents: string[] = cIdentity.intent_types || [];
       if (cIntents.includes("all")) return true;
       return searcherIntents.some((si) => cIntents.includes(si));
     });
 
-    // No fallback — if intent removes everyone, report it
-    const finalCandidates = intentFiltered;
+    const primaryFinal = applyIntentFilter(primaryPool);
+    const secondaryFinal = applyIntentFilter(secondaryPool);
+    const finalCandidates = [...primaryFinal, ...secondaryFinal];
 
     if (finalCandidates.length === 0) {
       return new Response(JSON.stringify({
         matches: [],
-        noMatchReason: "No profiles match your intent. Try broadening your search.",
+        noMatchReason: "No profiles match your search criteria or intent. Try broadening your filters.",
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+
+    // Tag each candidate with matchType for frontend sectioning
+    const primaryFinalIds = new Set(primaryFinal.map((c: any) => c.user_id));
+
 
     // ── Step 3: AI Scoring ──
     const buildFullProfileJSON = (profile: any, identity: any, personality: any, ikigai: any) => ({
@@ -384,10 +406,15 @@ OUTPUT FORMAT (JSON):
           location: [candidate.location_city, candidate.location_country].filter(Boolean).join(", "),
           compatibility: Math.min(100, Math.max(0, Number(score.compatibility) || 0)),
           sustainability: Math.min(100, Math.max(0, Number(score.sustainability) || 0)),
+          matchType: primaryFinalIds.has(candidate.user_id) ? "primary" : "secondary",
         };
       })
       .filter(Boolean)
-      .sort((a: any, b: any) => b.compatibility - a.compatibility);
+      .sort((a: any, b: any) => {
+        // Primary matches first, then secondary; within each group sort by compatibility
+        if (a.matchType !== b.matchType) return a.matchType === "primary" ? -1 : 1;
+        return b.compatibility - a.compatibility;
+      });
 
     // Cache matches
     for (const match of finalMatches) {
