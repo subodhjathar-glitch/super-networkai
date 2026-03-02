@@ -32,8 +32,44 @@ const Auth = () => {
       if (error) {
         toast.error(error.message);
       } else {
-        // Navigation is handled by ProtectedRoute/onboarding logic
-        navigate("/search");
+        // Check onboarding completion before deciding where to navigate
+        const { data: { user: loggedInUser } } = await supabase.auth.getUser();
+        if (loggedInUser) {
+          const [identityRes, profileRes, ikigaiRes, personalityRes] = await Promise.all([
+            supabase.from("user_identity").select("identity_type, intent_types").eq("user_id", loggedInUser.id).maybeSingle(),
+            supabase.from("profiles").select("name, core_skills, cv_url, location_country, location_city, industries").eq("user_id", loggedInUser.id).maybeSingle(),
+            supabase.from("ikigai").select("love_text, good_at_text, world_needs_text, livelihood_text").eq("user_id", loggedInUser.id).maybeSingle(),
+            supabase.from("personality").select("working_style, stress_response, communication_style").eq("user_id", loggedInUser.id).maybeSingle(),
+          ]);
+
+          const hasIdentity = !!(identityRes.data?.identity_type && identityRes.data?.intent_types?.length);
+          const hasProfile = !!(
+            profileRes.data?.name?.trim() &&
+            (profileRes.data?.location_country || profileRes.data?.location_city) &&
+            (profileRes.data?.industries?.length > 0) &&
+            (profileRes.data?.core_skills?.length > 0) &&
+            profileRes.data?.cv_url
+          );
+          const hasIkigai = !!(
+            ikigaiRes.data?.love_text?.trim() &&
+            ikigaiRes.data?.good_at_text?.trim() &&
+            ikigaiRes.data?.world_needs_text?.trim() &&
+            ikigaiRes.data?.livelihood_text?.trim()
+          );
+          const hasPersonality = !!(
+            personalityRes.data?.working_style &&
+            personalityRes.data?.stress_response &&
+            personalityRes.data?.communication_style
+          );
+
+          if (hasIdentity && hasProfile && hasIkigai && hasPersonality) {
+            navigate("/search");
+          } else {
+            navigate("/onboarding");
+          }
+        } else {
+          navigate("/onboarding");
+        }
       }
     }
     setLoading(false);
