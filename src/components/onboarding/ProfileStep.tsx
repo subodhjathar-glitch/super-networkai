@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Upload, CheckCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, Upload, CheckCircle, Loader2, AlertCircle } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -20,6 +20,7 @@ export interface ProfileData {
   twitter?: string;
   github?: string;
   portfolio?: string;
+  cvUploaded?: boolean;
 }
 
 interface Props {
@@ -34,6 +35,7 @@ const ProfileStep = ({ data, onChange, onNext, onBack }: Props) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [cvFileName, setCvFileName] = useState<string | null>(null);
+  const [attempted, setAttempted] = useState(false);
 
   const update = (partial: Partial<ProfileData>) => {
     onChange({ ...data, ...partial });
@@ -72,11 +74,35 @@ const ProfileStep = ({ data, onChange, onNext, onBack }: Props) => {
     await supabase.from("profiles").update({ cv_url: filePath }).eq("user_id", user.id);
 
     setCvFileName(file.name);
+    update({ cvUploaded: true });
     toast.success("CV uploaded successfully!");
     setUploading(false);
   };
 
-  const canProceed = data.name.trim() && (data.location_country || data.location_city) && (data.industries.length > 0 || data.industry_other);
+  const hasCv = data.cvUploaded || !!cvFileName;
+  const hasName = data.name.trim().length > 0;
+  const hasLocation = !!(data.location_country || data.location_city.trim());
+  const hasIndustry = data.industries.length > 0 || data.industry_other.trim().length > 0;
+  const hasSkills = data.skills.length > 0;
+  const canProceed = hasName && hasLocation && hasIndustry && hasSkills && hasCv;
+
+  const handleNext = () => {
+    setAttempted(true);
+    if (!canProceed) {
+      const missing: string[] = [];
+      if (!hasName) missing.push("Full name");
+      if (!hasLocation) missing.push("Location");
+      if (!hasIndustry) missing.push("Industry");
+      if (!hasSkills) missing.push("Skills");
+      if (!hasCv) missing.push("CV upload");
+      toast.error(`Please complete: ${missing.join(", ")}`);
+      return;
+    }
+    onNext();
+  };
+
+  const fieldError = (valid: boolean) =>
+    attempted && !valid ? "border-destructive/50" : "";
 
   return (
     <div className="space-y-8">
@@ -85,25 +111,34 @@ const ProfileStep = ({ data, onChange, onNext, onBack }: Props) => {
           Your profile
         </h1>
         <p className="text-muted-foreground text-lg">
-          Help us understand your professional background.
+          Help us understand your professional background. All fields marked with <span className="text-destructive">*</span> are required.
         </p>
       </div>
 
       <div className="space-y-6">
         {/* Full name */}
         <div>
-          <label className="text-sm font-medium text-foreground mb-1.5 block">Full name</label>
+          <label className="text-sm font-medium text-foreground mb-1.5 block">
+            Full name <span className="text-destructive">*</span>
+          </label>
           <Input
             value={data.name}
             onChange={(e) => update({ name: e.target.value })}
             placeholder="Your full name"
-            className="h-12"
+            className={`h-12 ${fieldError(hasName)}`}
           />
+          {attempted && !hasName && (
+            <p className="text-xs text-destructive mt-1 flex items-center gap-1">
+              <AlertCircle className="w-3 h-3" /> Full name is required
+            </p>
+          )}
         </div>
 
         {/* Location */}
         <div>
-          <label className="text-sm font-medium text-foreground mb-1.5 block">Location</label>
+          <label className="text-sm font-medium text-foreground mb-1.5 block">
+            Location <span className="text-destructive">*</span>
+          </label>
           <div className="grid grid-cols-2 gap-3">
             <ScrollableSelect
               options={COUNTRIES}
@@ -122,11 +157,18 @@ const ProfileStep = ({ data, onChange, onNext, onBack }: Props) => {
               />
             </div>
           </div>
+          {attempted && !hasLocation && (
+            <p className="text-xs text-destructive mt-1 flex items-center gap-1">
+              <AlertCircle className="w-3 h-3" /> Please provide at least a country or city
+            </p>
+          )}
         </div>
 
         {/* Industry */}
         <div>
-          <label className="text-sm font-medium text-foreground mb-1.5 block">Primary industry</label>
+          <label className="text-sm font-medium text-foreground mb-1.5 block">
+            Primary industry <span className="text-destructive">*</span>
+          </label>
           <ScrollableSelect
             options={INDUSTRIES}
             selected={data.industries}
@@ -137,17 +179,29 @@ const ProfileStep = ({ data, onChange, onNext, onBack }: Props) => {
             otherValue={data.industry_other}
             onOtherChange={(val) => update({ industry_other: val })}
           />
+          {attempted && !hasIndustry && (
+            <p className="text-xs text-destructive mt-1 flex items-center gap-1">
+              <AlertCircle className="w-3 h-3" /> Select at least one industry or describe yours
+            </p>
+          )}
         </div>
 
         {/* Skills / Domain */}
         <div>
-          <label className="text-sm font-medium text-foreground mb-1.5 block">Skills & specialisation</label>
+          <label className="text-sm font-medium text-foreground mb-1.5 block">
+            Skills & specialisation <span className="text-destructive">*</span>
+          </label>
           <TagInput
             suggestions={SKILLS}
             tags={data.skills}
             onChange={(tags) => update({ skills: tags })}
             placeholder="Type to search skills or add your own..."
           />
+          {attempted && !hasSkills && (
+            <p className="text-xs text-destructive mt-1 flex items-center gap-1">
+              <AlertCircle className="w-3 h-3" /> Add at least one skill
+            </p>
+          )}
         </div>
 
         {/* Social links - optional */}
@@ -183,9 +237,11 @@ const ProfileStep = ({ data, onChange, onNext, onBack }: Props) => {
           </div>
         </div>
 
-        {/* CV Upload area */}
+        {/* CV Upload area — MANDATORY */}
         <div>
-          <label className="text-sm font-medium text-foreground mb-1.5 block">CV Upload</label>
+          <label className="text-sm font-medium text-foreground mb-1.5 block">
+            CV Upload <span className="text-destructive">*</span>
+          </label>
           <input
             ref={fileInputRef}
             type="file"
@@ -196,7 +252,11 @@ const ProfileStep = ({ data, onChange, onNext, onBack }: Props) => {
           <div
             onClick={() => !uploading && fileInputRef.current?.click()}
             className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer bg-card ${
-              cvFileName ? "border-accent/60" : "border-border hover:border-accent/40"
+              cvFileName || data.cvUploaded
+                ? "border-accent/60"
+                : attempted && !hasCv
+                ? "border-destructive/50"
+                : "border-border hover:border-accent/40"
             }`}
           >
             {uploading ? (
@@ -204,10 +264,10 @@ const ProfileStep = ({ data, onChange, onNext, onBack }: Props) => {
                 <Loader2 className="w-8 h-8 text-accent mx-auto mb-3 animate-spin" />
                 <p className="text-sm text-foreground font-medium mb-1">Uploading...</p>
               </>
-            ) : cvFileName ? (
+            ) : cvFileName || data.cvUploaded ? (
               <>
                 <CheckCircle className="w-8 h-8 text-accent mx-auto mb-3" />
-                <p className="text-sm text-foreground font-medium mb-1">{cvFileName}</p>
+                <p className="text-sm text-foreground font-medium mb-1">{cvFileName || "CV uploaded"}</p>
                 <p className="text-xs text-muted-foreground">Click to replace</p>
               </>
             ) : (
@@ -215,11 +275,16 @@ const ProfileStep = ({ data, onChange, onNext, onBack }: Props) => {
                 <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
                 <p className="text-sm text-foreground font-medium mb-1">Drop your CV here or click to browse</p>
                 <p className="text-xs text-muted-foreground">
-                  PDF or Word document, max 10MB. Makes your matches significantly more accurate.
+                  PDF or Word document, max 10MB. <span className="text-destructive font-medium">Required</span> — makes your matches significantly more accurate.
                 </p>
               </>
             )}
           </div>
+          {attempted && !hasCv && (
+            <p className="text-xs text-destructive mt-1 flex items-center gap-1">
+              <AlertCircle className="w-3 h-3" /> CV upload is required for accurate matching
+            </p>
+          )}
         </div>
       </div>
 
@@ -229,8 +294,7 @@ const ProfileStep = ({ data, onChange, onNext, onBack }: Props) => {
           Back
         </Button>
         <Button
-          onClick={onNext}
-          disabled={!canProceed}
+          onClick={handleNext}
           className="flex-1 gradient-hero text-primary-foreground border-0 hover:opacity-90 h-12 text-base"
         >
           Continue

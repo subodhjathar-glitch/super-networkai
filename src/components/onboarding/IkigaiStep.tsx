@@ -2,7 +2,8 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 interface Props {
   ikigai: { love: string; good: string; world: string; livelihood: string };
@@ -46,10 +47,15 @@ const questions = [
   },
 ];
 
+const MIN_CHARS = 20;
+
 const IkigaiStep = ({ ikigai, onChange, onNext, onBack }: Props) => {
   const [activeQ, setActiveQ] = useState(0);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [generatingSummary, setGeneratingSummary] = useState(false);
 
-  const filled = questions.filter((q) => ikigai[q.key].trim().length > 0);
+  const filled = questions.filter((q) => ikigai[q.key].trim().length >= MIN_CHARS);
+  const allFilled = filled.length === 4;
 
   const circles = [
     { cx: 130, cy: 120, key: "love" as const, color: "hsl(var(--ikigai-love))" },
@@ -61,6 +67,47 @@ const IkigaiStep = ({ ikigai, onChange, onNext, onBack }: Props) => {
   const handleAnswer = (value: string) => {
     onChange({ ...ikigai, [questions[activeQ].key]: value });
   };
+
+  // Generate AI interpretation when all 4 are filled
+  const generateAiSummary = async () => {
+    if (generatingSummary || aiSummary) return;
+    setGeneratingSummary(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) return;
+
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-ikigai`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ ikigai }),
+        }
+      );
+
+      if (res.ok) {
+        const data = await res.json();
+        setAiSummary(data.summary || null);
+      }
+    } catch (e) {
+      console.error("Ikigai AI summary error:", e);
+    } finally {
+      setGeneratingSummary(false);
+    }
+  };
+
+  // Trigger when all filled
+  if (allFilled && !aiSummary && !generatingSummary) {
+    generateAiSummary();
+  }
+
+  const currentQ = questions[activeQ];
+  const currentLen = ikigai[currentQ.key].trim().length;
+  const currentValid = currentLen >= MIN_CHARS;
 
   return (
     <div className="space-y-8">
@@ -78,7 +125,7 @@ const IkigaiStep = ({ ikigai, onChange, onNext, onBack }: Props) => {
         <div className="flex justify-center">
           <svg viewBox="0 0 330 310" className="w-full max-w-[300px]">
             {circles.map((c, i) => {
-              const isFilled = ikigai[c.key].trim().length > 0;
+              const isFilled = ikigai[c.key].trim().length >= MIN_CHARS;
               return (
                 <motion.circle
                   key={c.key}
@@ -106,7 +153,7 @@ const IkigaiStep = ({ ikigai, onChange, onNext, onBack }: Props) => {
               animate={{ fillOpacity: filled.length > 0 ? 0.3 : 0.05, r: 10 + filled.length * 8 }}
               transition={{ duration: 0.6 }}
             />
-            {filled.length === 4 && (
+            {allFilled && (
               <motion.text
                 x="165"
                 y="157"
@@ -149,36 +196,56 @@ const IkigaiStep = ({ ikigai, onChange, onNext, onBack }: Props) => {
             ))}
           </div>
           <p className="text-base font-semibold text-foreground mb-1">
-            {questions[activeQ].label}
+            {currentQ.label} <span className="text-destructive">*</span>
           </p>
           <p className="text-sm text-muted-foreground mb-3">
-            {questions[activeQ].prompt}
+            {currentQ.prompt}
           </p>
           <Textarea
-            value={ikigai[questions[activeQ].key]}
+            value={ikigai[currentQ.key]}
             onChange={(e) => handleAnswer(e.target.value)}
-            placeholder={questions[activeQ].placeholder}
+            placeholder={currentQ.placeholder}
             className="min-h-[140px] resize-none"
           />
-          {activeQ < 3 && ikigai[questions[activeQ].key].trim() && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setActiveQ(activeQ + 1)}
-            >
-              Next question →
-            </Button>
-          )}
+          <div className="flex items-center justify-between">
+            <p className={`text-xs ${currentValid ? "text-muted-foreground" : "text-destructive"}`}>
+              {currentLen}/{MIN_CHARS} min characters
+              {currentValid && " ✓"}
+            </p>
+            {activeQ < 3 && currentValid && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setActiveQ(activeQ + 1)}
+              >
+                Next question →
+              </Button>
+            )}
+          </div>
 
-          {filled.length === 4 && (
+          {/* AI Interpretation */}
+          {allFilled && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               className="bg-accent/5 border border-accent/20 rounded-lg p-4 text-sm text-foreground"
             >
-              <span className="font-semibold text-accent">✨ Ikigai discovered:</span>{" "}
-              Based on what you've shared, your Ikigai appears centred around meaningful, 
-              purpose-driven work that combines your skills with real-world impact.
+              {generatingSummary ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-accent" />
+                  <span className="text-muted-foreground">Generating your Ikigai interpretation...</span>
+                </div>
+              ) : aiSummary ? (
+                <>
+                  <span className="font-semibold text-accent">✨ Your Ikigai:</span>{" "}
+                  {aiSummary}
+                </>
+              ) : (
+                <>
+                  <span className="font-semibold text-accent">✨ Ikigai discovered:</span>{" "}
+                  All four dimensions of your Ikigai are complete. Your answers will power vision alignment matching.
+                </>
+              )}
             </motion.div>
           )}
         </div>
@@ -191,7 +258,7 @@ const IkigaiStep = ({ ikigai, onChange, onNext, onBack }: Props) => {
         </Button>
         <Button
           onClick={onNext}
-          disabled={filled.length < 4}
+          disabled={!allFilled}
           className="flex-1 gradient-hero text-primary-foreground border-0 hover:opacity-90 h-12 text-base"
         >
           Continue to Assessment

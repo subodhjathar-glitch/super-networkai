@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { Users, Clock, Check, X, ArrowLeft } from "lucide-react";
+import { Users, Clock, Check, X, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -18,7 +18,7 @@ interface Connection {
 }
 
 const ConnectionsPage = () => {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [connections, setConnections] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,9 +100,15 @@ const ConnectionsPage = () => {
             </div>
             <span className="font-display font-bold text-lg text-foreground">SuperNetworkAI</span>
           </button>
-          <Button variant="outline" size="sm" onClick={() => navigate("/search")}>
-            Search
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => navigate("/search")}>
+              Search
+            </Button>
+            <Button variant="ghost" size="sm" onClick={async () => { await signOut(); navigate("/"); }} className="text-muted-foreground hover:text-destructive">
+              <LogOut className="w-4 h-4 mr-1" />
+              <span className="hidden sm:inline">Log out</span>
+            </Button>
+          </div>
         </div>
       </nav>
 

@@ -64,7 +64,7 @@ const Onboarding = () => {
           supabase.from("user_identity").select("identity_type, intent_types").eq("user_id", user.id).maybeSingle(),
           supabase
             .from("profiles")
-            .select("name, location_country, location_city, industries, industry_other, core_skills, linkedin_url, twitter_url, github_url, portfolio_url")
+            .select("name, location_country, location_city, industries, industry_other, core_skills, linkedin_url, twitter_url, github_url, portfolio_url, cv_url")
             .eq("user_id", user.id)
             .maybeSingle(),
           supabase
@@ -102,6 +102,7 @@ const Onboarding = () => {
             twitter: profileRes.data?.twitter_url || "",
             github: profileRes.data?.github_url || "",
             portfolio: profileRes.data?.portfolio_url || "",
+            cvUploaded: !!profileRes.data?.cv_url,
           },
           ikigai: {
             love: ikigaiRes.data?.love_text || "",
