@@ -1,36 +1,130 @@
 import { useEffect, useState, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Search, MessageCircle, LogOut, MapPin, ChevronDown } from "lucide-react";
+import { Search, LogOut, MapPin, ChevronDown, X, Briefcase, Wrench } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { COUNTRIES } from "@/components/onboarding/constants";
+import { COUNTRIES, INDUSTRIES, SKILLS } from "@/components/onboarding/constants";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import MatchCard from "@/components/MatchCard";
 
-const placeholders = [
-  "A technical co-founder who values impact over status...",
-  "Someone who cares deeply about health tech and won't walk away...",
-  "A UX designer looking for creative ownership in fintech...",
-];
+/* ── Scrollable multi-select picker (inline) ── */
+const FilterPicker = ({
+  label,
+  icon: Icon,
+  options,
+  selected,
+  onChange,
+  placeholder = "Any",
+  multi = true,
+}: {
+  label: string;
+  icon: React.ElementType;
+  options: string[];
+  selected: string[];
+  onChange: (v: string[]) => void;
+  placeholder?: string;
+  multi?: boolean;
+}) => {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const filtered = useMemo(
+    () => options.filter((o) => o.toLowerCase().includes(search.toLowerCase())),
+    [options, search]
+  );
+
+  const toggle = (val: string) => {
+    if (multi) {
+      onChange(
+        selected.includes(val) ? selected.filter((s) => s !== val) : [...selected, val]
+      );
+    } else {
+      onChange(selected.includes(val) ? [] : [val]);
+      setOpen(false);
+    }
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
+        <Icon className="w-4 h-4 text-muted-foreground" />
+        {label}
+      </label>
+
+      {/* Selected tags */}
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-1">
+          {selected.map((s) => (
+            <span
+              key={s}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-accent/15 text-accent border border-accent/20"
+            >
+              {s}
+              <X
+                className="w-3 h-3 cursor-pointer hover:text-foreground"
+                onClick={() => toggle(s)}
+              />
+            </span>
+          ))}
+        </div>
+      )}
+
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button variant="outline" size="sm" className="h-9 w-full justify-between text-sm">
+            {selected.length > 0 ? `${selected.length} selected` : placeholder}
+            <ChevronDown className="w-3.5 h-3.5 ml-1 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[260px] p-2" align="start">
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={`Search ${label.toLowerCase()}...`}
+            className="h-8 text-sm mb-2"
+          />
+          <ScrollArea className="h-[200px]">
+            {filtered.map((option) => {
+              const isSelected = selected.includes(option);
+              return (
+                <button
+                  key={option}
+                  onClick={() => toggle(option)}
+                  className={`w-full text-left px-2 py-1.5 rounded text-sm transition-colors ${
+                    isSelected ? "bg-accent/10 text-accent font-medium" : "hover:bg-secondary"
+                  }`}
+                >
+                  {option}
+                </button>
+              );
+            })}
+            {filtered.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-3">No results</p>
+            )}
+          </ScrollArea>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+};
 
 const SearchPage = () => {
-  const [query, setQuery] = useState("");
-  const [searched, setSearched] = useState(false);
-  const [followUp, setFollowUp] = useState("");
-  const [followUpAnswer, setFollowUpAnswer] = useState("");
-  const [showResults, setShowResults] = useState(false);
-  const [matches, setMatches] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
-  const [profileName, setProfileName] = useState("");
-  const [noMatchReason, setNoMatchReason] = useState("");
+  const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [prefCountry, setPrefCountry] = useState("");
   const [prefCity, setPrefCity] = useState("");
+  const [freeText, setFreeText] = useState("");
+  const [matches, setMatches] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
+  const [noMatchReason, setNoMatchReason] = useState("");
+  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
+  const [profileName, setProfileName] = useState("");
   const [countrySearch, setCountrySearch] = useState("");
   const [countryOpen, setCountryOpen] = useState(false);
   const navigate = useNavigate();
@@ -46,32 +140,15 @@ const SearchPage = () => {
 
     const check = async () => {
       const [identityRes, profileRes, ikigaiRes, personalityRes] = await Promise.all([
-        supabase
-          .from("user_identity")
-          .select("id, identity_type, intent_types")
-          .eq("user_id", user.id)
-          .maybeSingle(),
-        supabase
-          .from("profiles")
-          .select("name, core_skills, industries, cv_url, location_country, location_city")
-          .eq("user_id", user.id)
-          .maybeSingle(),
-        supabase
-          .from("ikigai")
-          .select("love_text, good_at_text, world_needs_text, livelihood_text")
-          .eq("user_id", user.id)
-          .maybeSingle(),
-        supabase
-          .from("personality")
-          .select("working_style, stress_response, communication_style")
-          .eq("user_id", user.id)
-          .maybeSingle(),
+        supabase.from("user_identity").select("id, identity_type, intent_types").eq("user_id", user.id).maybeSingle(),
+        supabase.from("profiles").select("name, core_skills, industries, cv_url, location_country, location_city").eq("user_id", user.id).maybeSingle(),
+        supabase.from("ikigai").select("love_text, good_at_text, world_needs_text, livelihood_text").eq("user_id", user.id).maybeSingle(),
+        supabase.from("personality").select("working_style, stress_response, communication_style").eq("user_id", user.id).maybeSingle(),
       ]);
 
       const name = profileRes.data?.name?.trim() || user.email?.split("@")[0] || "there";
       setProfileName(name);
 
-      // Check each onboarding step for completeness
       const hasIdentity = !!(identityRes.data?.identity_type && identityRes.data?.intent_types?.length);
       const hasProfile = !!(
         profileRes.data?.name?.trim() &&
@@ -103,82 +180,76 @@ const SearchPage = () => {
     check();
   }, [user, navigate]);
 
-  const getToken = async () => {
-    const { data } = await supabase.auth.getSession();
-    return data.session?.access_token;
-  };
+  const hasFilters = selectedIndustries.length > 0 || selectedSkills.length > 0 || prefCountry || prefCity.trim() || freeText.trim();
 
-  const callAiSearch = async (step: string, body: any) => {
-    const token = await getToken();
+  const handleSearch = async () => {
+    if (!hasFilters) {
+      toast.error("Please select at least one filter.");
+      return;
+    }
+
+    setLoading(true);
+    setSearched(false);
+    setMatches([]);
+    setNoMatchReason("");
+
+    const token = (await supabase.auth.getSession()).data.session?.access_token;
     if (!token) {
       toast.error("Please sign in first.");
       navigate("/auth");
-      return null;
+      setLoading(false);
+      return;
     }
 
-    const res = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-search`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ step, ...body }),
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-search`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            step: "search",
+            filterIndustries: selectedIndustries,
+            filterSkills: selectedSkills,
+            prefCountry,
+            prefCity: prefCity.trim(),
+            freeText: freeText.trim(),
+          }),
+        }
+      );
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Unknown error" }));
+        if (res.status === 429) toast.error("Rate limited. Please wait a moment.");
+        else if (res.status === 402) toast.error("Usage limit reached. Please add credits.");
+        else toast.error(err.error || "Search failed.");
+        setLoading(false);
+        return;
       }
-    );
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: "Unknown error" }));
-      if (res.status === 429) {
-        toast.error("Rate limited. Please wait a moment and try again.");
-      } else if (res.status === 402) {
-        toast.error("Usage limit reached. Please add credits.");
-      } else {
-        toast.error(err.error || "Search failed. Please try again.");
-      }
-      return null;
-    }
-
-    return res.json();
-  };
-
-  const handleSearch = async () => {
-    if (!query.trim()) return;
-    setLoading(true);
-    setSearched(false);
-    setShowResults(false);
-    setMatches([]);
-    setFollowUp("");
-    setFollowUpAnswer("");
-    setNoMatchReason("");
-
-    const result = await callAiSearch("follow-up", { query: query.trim(), prefCountry, prefCity: prefCity.trim() });
-    setLoading(false);
-
-    if (result) {
-      setFollowUp(result.followUp || "What's most important to you in this collaboration?");
-      setSearched(true);
-    }
-  };
-
-  const handleFollowUp = async () => {
-    if (!followUpAnswer.trim()) return;
-    setLoading(true);
-
-    const result = await callAiSearch("search", {
-      query: query.trim(),
-      followUpAnswer: followUpAnswer.trim(),
-      prefCountry,
-      prefCity: prefCity.trim(),
-    });
-    setLoading(false);
-
-    if (result) {
+      const result = await res.json();
       setMatches(result.matches || []);
       setNoMatchReason(result.noMatchReason || "");
-      setShowResults(true);
+      setSearched(true);
+    } catch {
+      toast.error("Search failed. Please try again.");
     }
+
+    setLoading(false);
+  };
+
+  const clearAll = () => {
+    setSelectedIndustries([]);
+    setSelectedSkills([]);
+    setPrefCountry("");
+    setPrefCity("");
+    setFreeText("");
+    setMatches([]);
+    setSearched(false);
+    setNoMatchReason("");
   };
 
   if (checkingOnboarding) {
@@ -227,127 +298,123 @@ const SearchPage = () => {
               Find your people
             </h1>
             <p className="text-muted-foreground text-lg">
-              Describe who you're looking for in your own words.
+              Select the industry, skills, and location you're looking for.
             </p>
           </motion.div>
 
-          {/* Search */}
-          <div className="relative mb-8">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-              placeholder={placeholders[0]}
-              className="h-14 pl-12 pr-28 text-base rounded-xl shadow-card border-border"
-              disabled={loading}
-            />
-            <Button
-              onClick={handleSearch}
-              disabled={loading || !query.trim()}
-              className="absolute right-2 top-1/2 -translate-y-1/2 gradient-hero text-primary-foreground border-0 hover:opacity-90"
-            >
-              {loading && !searched ? "..." : "Search"}
-            </Button>
-          </div>
+          {/* Structured Filters */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="bg-card rounded-xl p-6 shadow-card border border-border mb-8 space-y-5"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {/* Industry */}
+              <FilterPicker
+                label="Industry"
+                icon={Briefcase}
+                options={INDUSTRIES}
+                selected={selectedIndustries}
+                onChange={setSelectedIndustries}
+                placeholder="Select industries..."
+              />
 
-          {/* Location Filters */}
-          <div className="flex flex-wrap items-center gap-3 mb-8">
-            <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
-            <span className="text-sm text-muted-foreground">Filter by location:</span>
-            
-            {/* Country picker */}
-            <Popover open={countryOpen} onOpenChange={setCountryOpen}>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-9 min-w-[140px] justify-between text-sm">
-                  {prefCountry || "Any country"}
-                  <ChevronDown className="w-3.5 h-3.5 ml-1 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[220px] p-2" align="start">
-                <Input
-                  value={countrySearch}
-                  onChange={(e) => setCountrySearch(e.target.value)}
-                  placeholder="Search country..."
-                  className="h-8 text-sm mb-2"
-                />
-                <ScrollArea className="h-[200px]">
-                  <button
-                    onClick={() => { setPrefCountry(""); setCountryOpen(false); setCountrySearch(""); }}
-                    className={`w-full text-left px-2 py-1.5 rounded text-sm transition-colors ${!prefCountry ? "bg-accent/10 text-accent" : "hover:bg-secondary"}`}
-                  >
-                    Any country
-                  </button>
-                  {COUNTRIES.filter(c => c.toLowerCase().includes(countrySearch.toLowerCase())).map(c => (
-                    <button
-                      key={c}
-                      onClick={() => { setPrefCountry(c); setCountryOpen(false); setCountrySearch(""); }}
-                      className={`w-full text-left px-2 py-1.5 rounded text-sm transition-colors ${prefCountry === c ? "bg-accent/10 text-accent" : "hover:bg-secondary"}`}
-                    >
-                      {c}
-                    </button>
-                  ))}
-                </ScrollArea>
-              </PopoverContent>
-            </Popover>
+              {/* Skills / Role */}
+              <FilterPicker
+                label="Skills & Roles"
+                icon={Wrench}
+                options={SKILLS}
+                selected={selectedSkills}
+                onChange={setSelectedSkills}
+                placeholder="Select skills..."
+              />
+            </div>
 
-            {/* City input */}
-            <Input
-              value={prefCity}
-              onChange={(e) => setPrefCity(e.target.value)}
-              placeholder="Any city"
-              className="h-9 w-[160px] text-sm"
-            />
-
-            {(prefCountry || prefCity) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => { setPrefCountry(""); setPrefCity(""); }}
-                className="h-9 text-xs text-muted-foreground"
-              >
-                Clear
-              </Button>
-            )}
-          </div>
-
-          {/* Follow-up */}
-          {searched && !showResults && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-card rounded-xl p-6 shadow-card border border-border mb-8"
-            >
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-lg gradient-accent flex items-center justify-center shrink-0 mt-0.5">
-                  <MessageCircle className="w-4 h-4 text-primary-foreground" />
-                </div>
-                <div className="flex-1 space-y-3">
-                  <p className="text-foreground font-medium">{followUp}</p>
-                  <div className="flex gap-2">
-                    <Input
-                      value={followUpAnswer}
-                      onChange={(e) => setFollowUpAnswer(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleFollowUp()}
-                      placeholder="Type your answer..."
-                      className="flex-1"
-                      disabled={loading}
-                    />
-                    <Button
-                      onClick={handleFollowUp}
-                      variant="outline"
-                      disabled={!followUpAnswer.trim() || loading}
-                    >
-                      {loading ? "..." : "Answer"}
+            {/* Location */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                <MapPin className="w-4 h-4 text-muted-foreground" />
+                Location
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <Popover open={countryOpen} onOpenChange={setCountryOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-9 w-full justify-between text-sm">
+                      {prefCountry || "Any country"}
+                      <ChevronDown className="w-3.5 h-3.5 ml-1 opacity-50" />
                     </Button>
-                  </div>
-                </div>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[220px] p-2" align="start">
+                    <Input
+                      value={countrySearch}
+                      onChange={(e) => setCountrySearch(e.target.value)}
+                      placeholder="Search country..."
+                      className="h-8 text-sm mb-2"
+                    />
+                    <ScrollArea className="h-[200px]">
+                      <button
+                        onClick={() => { setPrefCountry(""); setCountryOpen(false); setCountrySearch(""); }}
+                        className={`w-full text-left px-2 py-1.5 rounded text-sm transition-colors ${!prefCountry ? "bg-accent/10 text-accent" : "hover:bg-secondary"}`}
+                      >
+                        Any country
+                      </button>
+                      {COUNTRIES.filter((c) => c.toLowerCase().includes(countrySearch.toLowerCase())).map((c) => (
+                        <button
+                          key={c}
+                          onClick={() => { setPrefCountry(c); setCountryOpen(false); setCountrySearch(""); }}
+                          className={`w-full text-left px-2 py-1.5 rounded text-sm transition-colors ${prefCountry === c ? "bg-accent/10 text-accent" : "hover:bg-secondary"}`}
+                        >
+                          {c}
+                        </button>
+                      ))}
+                    </ScrollArea>
+                  </PopoverContent>
+                </Popover>
+
+                <Input
+                  value={prefCity}
+                  onChange={(e) => setPrefCity(e.target.value)}
+                  placeholder="Any city"
+                  className="h-9 text-sm"
+                />
               </div>
-            </motion.div>
-          )}
+            </div>
+
+            {/* Optional free-text */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                <Search className="w-4 h-4 text-muted-foreground" />
+                Additional context <span className="text-muted-foreground font-normal">(optional)</span>
+              </label>
+              <Input
+                value={freeText}
+                onChange={(e) => setFreeText(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                placeholder="E.g. 'Looking for someone passionate about climate tech with startup experience'"
+                className="h-10 text-sm"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 pt-1">
+              <Button
+                onClick={handleSearch}
+                disabled={loading || !hasFilters}
+                className="flex-1 gradient-hero text-primary-foreground border-0 hover:opacity-90 h-11 text-base"
+              >
+                {loading ? "Searching..." : "Search"}
+              </Button>
+              {hasFilters && (
+                <Button variant="outline" onClick={clearAll} className="h-11">
+                  Clear all
+                </Button>
+              )}
+            </div>
+          </motion.div>
 
           {/* Results */}
-          {showResults && (
+          {searched && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -360,7 +427,7 @@ const SearchPage = () => {
                 <div className="text-center py-12">
                   <p className="text-muted-foreground text-lg">No exact matches found.</p>
                   <p className="text-sm text-muted-foreground mt-2">
-                    {noMatchReason || "Try broader wording or related skill terms."}
+                    {noMatchReason || "Try broadening your filters or selecting different industries/skills."}
                   </p>
                 </div>
               )}
