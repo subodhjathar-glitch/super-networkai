@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { COUNTRIES, INDUSTRIES, SKILLS } from "@/components/onboarding/constants";
+import { COUNTRIES, INDUSTRIES, INDUSTRY_SKILL_ROLE_MAP, SKILLS } from "@/components/onboarding/constants";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
@@ -180,6 +180,16 @@ const SearchPage = () => {
     check();
   }, [user, navigate]);
 
+  const selectedIndustry = selectedIndustries[0] || "";
+  const availableSkillsAndRoles = useMemo(() => {
+    if (!selectedIndustry) return SKILLS;
+    return INDUSTRY_SKILL_ROLE_MAP[selectedIndustry] || SKILLS;
+  }, [selectedIndustry]);
+
+  useEffect(() => {
+    setSelectedSkills((prev) => prev.filter((skill) => availableSkillsAndRoles.includes(skill)));
+  }, [availableSkillsAndRoles]);
+
   const hasFilters = selectedIndustries.length > 0 || selectedSkills.length > 0 || prefCountry || prefCity.trim() || freeText.trim();
 
   const handleSearch = async () => {
@@ -317,17 +327,18 @@ const SearchPage = () => {
                 options={INDUSTRIES}
                 selected={selectedIndustries}
                 onChange={setSelectedIndustries}
-                placeholder="Select industries..."
+                placeholder="Select one industry..."
+                multi={false}
               />
 
               {/* Skills / Role */}
               <FilterPicker
                 label="Skills & Roles"
                 icon={Wrench}
-                options={SKILLS}
+                options={availableSkillsAndRoles}
                 selected={selectedSkills}
                 onChange={setSelectedSkills}
-                placeholder="Select skills..."
+                placeholder={selectedIndustry ? `Select skills for ${selectedIndustry}...` : "Select industry first (optional)"}
               />
             </div>
 

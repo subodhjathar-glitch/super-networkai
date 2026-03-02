@@ -146,3 +146,15 @@ export const SKILLS = [
   "Leadership",
   "Strategy",
 ];
+
+export const INDUSTRY_SKILL_ROLE_MAP: Record<string, string[]> = {
+  "Fintech": ["Finance & Accounting", "Sales", "Business Development", "Product Management", "Data Science", "Legal & Compliance", "Operations", "Strategy"],
+  "Technology": ["Frontend Development", "Backend Development", "React", "Node.js", "System Design", "DevOps", "Product Management", "Leadership"],
+  "Health Tech": ["Product Management", "Data Science", "Machine Learning", "Operations", "Legal & Compliance", "Research"],
+  "AI & Machine Learning": ["Machine Learning", "Data Science", "NLP", "Computer Vision", "Python", "Data Engineering", "Research"],
+  "SaaS": ["Product Management", "Frontend Development", "Backend Development", "Sales", "Growth Marketing", "Operations"],
+  "Cybersecurity": ["Cybersecurity", "Backend Development", "Cloud Architecture", "DevOps", "Legal & Compliance", "System Design"],
+  "Retail & E-commerce": ["Sales", "Growth Marketing", "SEO", "Content Strategy", "Operations", "Supply Chain", "Product Management"],
+  "Marketing & Advertising": ["Growth Marketing", "SEO", "Content Strategy", "Copywriting", "Sales", "Business Development"],
+  "Creative & Design": ["UI/UX Design", "Graphic Design", "Video Production", "Copywriting", "Product Management"],
+};
