@@ -223,9 +223,11 @@ export type Database = {
           ideal_environment: string | null
           involvement_pref: string | null
           leadership_pref: string[] | null
+          leadership_pref_other: string | null
           long_term_vision: string | null
           mission_priority: string | null
           mission_priority_detail: string | null
+          mission_priority_other: string | null
           motivation_style: string | null
           motivation_style_other: string | null
           non_negotiables: string | null
@@ -285,9 +287,11 @@ export type Database = {
           ideal_environment?: string | null
           involvement_pref?: string | null
           leadership_pref?: string[] | null
+          leadership_pref_other?: string | null
           long_term_vision?: string | null
           mission_priority?: string | null
           mission_priority_detail?: string | null
+          mission_priority_other?: string | null
           motivation_style?: string | null
           motivation_style_other?: string | null
           non_negotiables?: string | null
@@ -347,9 +351,11 @@ export type Database = {
           ideal_environment?: string | null
           involvement_pref?: string | null
           leadership_pref?: string[] | null
+          leadership_pref_other?: string | null
           long_term_vision?: string | null
           mission_priority?: string | null
           mission_priority_detail?: string | null
+          mission_priority_other?: string | null
           motivation_style?: string | null
           motivation_style_other?: string | null
           non_negotiables?: string | null
