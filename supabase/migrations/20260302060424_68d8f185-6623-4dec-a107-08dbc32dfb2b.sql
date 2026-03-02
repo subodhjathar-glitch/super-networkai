@@ -1,0 +1,1 @@
+ALTER TABLE public.personality ADD COLUMN IF NOT EXISTS budget_philosophy_other text;

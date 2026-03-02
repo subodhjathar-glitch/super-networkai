@@ -201,6 +201,7 @@ export type Database = {
           assertiveness_other: string | null
           autonomy_level: string | null
           budget_philosophy: string[] | null
+          budget_philosophy_other: string | null
           commitment_consistency: string | null
           commitment_consistency_other: string | null
           commitment_type: string | null
@@ -265,6 +266,7 @@ export type Database = {
           assertiveness_other?: string | null
           autonomy_level?: string | null
           budget_philosophy?: string[] | null
+          budget_philosophy_other?: string | null
           commitment_consistency?: string | null
           commitment_consistency_other?: string | null
           commitment_type?: string | null
@@ -329,6 +331,7 @@ export type Database = {
           assertiveness_other?: string | null
           autonomy_level?: string | null
           budget_philosophy?: string[] | null
+          budget_philosophy_other?: string | null
           commitment_consistency?: string | null
           commitment_consistency_other?: string | null
           commitment_type?: string | null

@@ -83,8 +83,15 @@ const Onboarding = () => {
           user_id: _userId,
           created_at: _createdAt,
           updated_at: _updatedAt,
-          ...personalityAnswers
+          ...personalityRest
         } = personalityRaw;
+        // Remove null/undefined values so they don't overwrite in-session answers
+        const personalityAnswers: Record<string, any> = {};
+        for (const [key, value] of Object.entries(personalityRest)) {
+          if (value !== null && value !== undefined) {
+            personalityAnswers[key] = value;
+          }
+        }
 
         const loadedData = {
           identity: identityRes.data?.identity_type || "",
