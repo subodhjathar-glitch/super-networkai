@@ -1,8 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Search, MessageCircle, LogOut } from "lucide-react";
+import { Search, MessageCircle, LogOut, MapPin, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { COUNTRIES } from "@/components/onboarding/constants";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
@@ -26,6 +29,10 @@ const SearchPage = () => {
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
   const [profileName, setProfileName] = useState("");
   const [noMatchReason, setNoMatchReason] = useState("");
+  const [prefCountry, setPrefCountry] = useState("");
+  const [prefCity, setPrefCity] = useState("");
+  const [countrySearch, setCountrySearch] = useState("");
+  const [countryOpen, setCountryOpen] = useState(false);
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
 
@@ -146,7 +153,7 @@ const SearchPage = () => {
     setFollowUpAnswer("");
     setNoMatchReason("");
 
-    const result = await callAiSearch("follow-up", { query: query.trim() });
+    const result = await callAiSearch("follow-up", { query: query.trim(), prefCountry, prefCity: prefCity.trim() });
     setLoading(false);
 
     if (result) {
@@ -162,6 +169,8 @@ const SearchPage = () => {
     const result = await callAiSearch("search", {
       query: query.trim(),
       followUpAnswer: followUpAnswer.trim(),
+      prefCountry,
+      prefCity: prefCity.trim(),
     });
     setLoading(false);
 
@@ -240,6 +249,66 @@ const SearchPage = () => {
             >
               {loading && !searched ? "..." : "Search"}
             </Button>
+          </div>
+
+          {/* Location Filters */}
+          <div className="flex flex-wrap items-center gap-3 mb-8">
+            <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
+            <span className="text-sm text-muted-foreground">Filter by location:</span>
+            
+            {/* Country picker */}
+            <Popover open={countryOpen} onOpenChange={setCountryOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-9 min-w-[140px] justify-between text-sm">
+                  {prefCountry || "Any country"}
+                  <ChevronDown className="w-3.5 h-3.5 ml-1 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[220px] p-2" align="start">
+                <Input
+                  value={countrySearch}
+                  onChange={(e) => setCountrySearch(e.target.value)}
+                  placeholder="Search country..."
+                  className="h-8 text-sm mb-2"
+                />
+                <ScrollArea className="h-[200px]">
+                  <button
+                    onClick={() => { setPrefCountry(""); setCountryOpen(false); setCountrySearch(""); }}
+                    className={`w-full text-left px-2 py-1.5 rounded text-sm transition-colors ${!prefCountry ? "bg-accent/10 text-accent" : "hover:bg-secondary"}`}
+                  >
+                    Any country
+                  </button>
+                  {COUNTRIES.filter(c => c.toLowerCase().includes(countrySearch.toLowerCase())).map(c => (
+                    <button
+                      key={c}
+                      onClick={() => { setPrefCountry(c); setCountryOpen(false); setCountrySearch(""); }}
+                      className={`w-full text-left px-2 py-1.5 rounded text-sm transition-colors ${prefCountry === c ? "bg-accent/10 text-accent" : "hover:bg-secondary"}`}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </ScrollArea>
+              </PopoverContent>
+            </Popover>
+
+            {/* City input */}
+            <Input
+              value={prefCity}
+              onChange={(e) => setPrefCity(e.target.value)}
+              placeholder="Any city"
+              className="h-9 w-[160px] text-sm"
+            />
+
+            {(prefCountry || prefCity) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { setPrefCountry(""); setPrefCity(""); }}
+                className="h-9 text-xs text-muted-foreground"
+              >
+                Clear
+              </Button>
+            )}
           </div>
 
           {/* Follow-up */}
