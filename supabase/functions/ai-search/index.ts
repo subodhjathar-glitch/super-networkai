@@ -94,16 +94,13 @@ serve(async (req) => {
       });
     }
 
-    // Filter by skills overlap
+    // Filter by skills overlap (strict — no fallback)
     if (skills.length > 0) {
       const skillsNorm = skills.map((s) => normalizeText(s));
-      const beforeSkillFilter = filtered;
       filtered = filtered.filter((c: any) => {
         const cSkills = (c.core_skills || []).map((s: string) => normalizeText(s));
         return skillsNorm.some((ss) => cSkills.some((cs: string) => cs.includes(ss) || ss.includes(cs)));
       });
-      // If skill filter removes everyone, fall back to industry-only matches
-      if (filtered.length === 0) filtered = beforeSkillFilter;
     }
 
     // Location filtering
@@ -117,7 +114,7 @@ serve(async (req) => {
         if (pCity && !cCity.includes(pCity) && !pCity.includes(cCity)) return false;
         return true;
       });
-      // Graceful fallback: if location removes all, keep unfiltered
+      // Location is a soft filter — keep results if location removes all
       if (locationFiltered.length > 0) filtered = locationFiltered;
     }
 
@@ -167,7 +164,8 @@ serve(async (req) => {
       return searcherIntents.some((si) => cIntents.includes(si));
     });
 
-    const finalCandidates = intentFiltered.length > 0 ? intentFiltered : filtered;
+    // No fallback — if intent removes everyone, report it
+    const finalCandidates = intentFiltered;
 
     if (finalCandidates.length === 0) {
       return new Response(JSON.stringify({
@@ -185,24 +183,56 @@ serve(async (req) => {
       skills: profile?.core_skills,
       domain: profile?.domain,
       industries: profile?.industries,
-      commitment_type: personality?.commitment_type,
-      financial_runway: personality?.financial_runway,
-      decision_speed: personality?.decision_speed,
-      communication_style: personality?.communication_style,
-      long_term_vision: personality?.long_term_vision,
+      // Ikigai
+      ikigai_love: ikigai?.love_text,
+      ikigai_good_at: ikigai?.good_at_text,
+      ikigai_world_needs: ikigai?.world_needs_text,
+      ikigai_livelihood: ikigai?.livelihood_text,
       ikigai_summary: ikigai?.ai_summary,
-      mission_priority: personality?.mission_priority,
-      mission_priority_detail: personality?.mission_priority_detail,
-      conflict_style: personality?.conflict_style,
-      conflict_detail: personality?.conflict_detail,
-      recognition_style: personality?.recognition_style,
-      commitment_consistency: personality?.commitment_consistency,
-      work_life_balance: personality?.work_life_balance,
+      // All personality fields
       working_style: personality?.working_style,
       working_style_detail: personality?.working_style_detail,
       stress_response: personality?.stress_response,
+      recognition_style: personality?.recognition_style,
+      communication_style: personality?.communication_style,
+      communication_depth: personality?.communication_depth,
+      communication_rhythm: personality?.communication_rhythm,
+      conflict_style: personality?.conflict_style,
+      conflict_detail: personality?.conflict_detail,
       trust_style: personality?.trust_style,
       trust_style_detail: personality?.trust_style_detail,
+      work_life_balance: personality?.work_life_balance,
+      mission_priority: personality?.mission_priority,
+      mission_priority_detail: personality?.mission_priority_detail,
+      vision_flexibility: personality?.vision_flexibility,
+      vision_flexibility_detail: personality?.vision_flexibility_detail,
+      decision_structure: personality?.decision_structure,
+      decision_speed: personality?.decision_speed,
+      commitment_type: personality?.commitment_type,
+      commitment_consistency: personality?.commitment_consistency,
+      financial_runway: personality?.financial_runway,
+      long_term_vision: personality?.long_term_vision,
+      equity_expectations: personality?.equity_expectations,
+      past_collaboration: personality?.past_collaboration,
+      ownership_style: personality?.ownership_style,
+      feedback_style: personality?.feedback_style,
+      feedback_style_detail: personality?.feedback_style_detail,
+      leadership_pref: personality?.leadership_pref,
+      autonomy_level: personality?.autonomy_level,
+      adaptability: personality?.adaptability,
+      motivation_style: personality?.motivation_style,
+      assertiveness: personality?.assertiveness,
+      ideal_environment: personality?.ideal_environment,
+      startup_readiness: personality?.startup_readiness,
+      dealbreakers: personality?.dealbreakers,
+      non_negotiables: personality?.non_negotiables,
+      involvement_pref: personality?.involvement_pref,
+      relationship_style: personality?.relationship_style,
+      scope_clarity: personality?.scope_clarity,
+      budget_philosophy: personality?.budget_philosophy,
+      timeline_style: personality?.timeline_style,
+      success_criteria: personality?.success_criteria,
+      step_back_reason: personality?.step_back_reason,
     });
 
     const searcherJSON = buildFullProfileJSON(searcherProfile, searcherIdentity, searcherPersonality, searcherIkigai);
