@@ -38,15 +38,25 @@ const SearchPage = () => {
     if (!user) return;
 
     const check = async () => {
-      const [identityRes, profileRes] = await Promise.all([
+      const [identityRes, profileRes, ikigaiRes, personalityRes] = await Promise.all([
         supabase
           .from("user_identity")
-          .select("id")
+          .select("id, identity_type, intent_types")
           .eq("user_id", user.id)
           .maybeSingle(),
         supabase
           .from("profiles")
-          .select("name")
+          .select("name, core_skills, industries, cv_url, location_country, location_city")
+          .eq("user_id", user.id)
+          .maybeSingle(),
+        supabase
+          .from("ikigai")
+          .select("love_text, good_at_text, world_needs_text, livelihood_text")
+          .eq("user_id", user.id)
+          .maybeSingle(),
+        supabase
+          .from("personality")
+          .select("working_style, stress_response, communication_style")
           .eq("user_id", user.id)
           .maybeSingle(),
       ]);
@@ -54,7 +64,29 @@ const SearchPage = () => {
       const name = profileRes.data?.name?.trim() || user.email?.split("@")[0] || "there";
       setProfileName(name);
 
-      if (!identityRes.data) {
+      // Check each onboarding step for completeness
+      const hasIdentity = !!(identityRes.data?.identity_type && identityRes.data?.intent_types?.length);
+      const hasProfile = !!(
+        profileRes.data?.name?.trim() &&
+        (profileRes.data?.location_country || profileRes.data?.location_city) &&
+        (profileRes.data?.industries?.length > 0) &&
+        (profileRes.data?.core_skills?.length > 0) &&
+        profileRes.data?.cv_url
+      );
+      const hasIkigai = !!(
+        ikigaiRes.data?.love_text?.trim() &&
+        ikigaiRes.data?.good_at_text?.trim() &&
+        ikigaiRes.data?.world_needs_text?.trim() &&
+        ikigaiRes.data?.livelihood_text?.trim()
+      );
+      const hasPersonality = !!(
+        personalityRes.data?.working_style &&
+        personalityRes.data?.stress_response &&
+        personalityRes.data?.communication_style
+      );
+
+      if (!hasIdentity || !hasProfile || !hasIkigai || !hasPersonality) {
+        toast.info("Please complete your profile to start searching.");
         navigate("/onboarding", { replace: true });
       } else {
         setCheckingOnboarding(false);
