@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Search, MessageCircle } from "lucide-react";
+import { Search, MessageCircle, LogOut } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
@@ -27,7 +27,12 @@ const SearchPage = () => {
   const [profileName, setProfileName] = useState("");
   const [noMatchReason, setNoMatchReason] = useState("");
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/");
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -161,6 +166,9 @@ const SearchPage = () => {
             </Button>
             <Button variant="outline" size="sm" onClick={() => navigate("/connections")}>
               Connections
+            </Button>
+            <Button variant="ghost" size="sm" onClick={handleSignOut} className="text-muted-foreground hover:text-destructive">
+              <LogOut className="w-4 h-4" />
             </Button>
           </div>
         </div>
