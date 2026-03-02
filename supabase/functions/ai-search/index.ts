@@ -65,7 +65,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
 
     const userId = claimsData.claims.sub as string;
-    const { query, followUpAnswer, step } = await req.json();
+    const { query, followUpAnswer, step, prefCountry, prefCity } = await req.json();
 
     const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -200,18 +200,46 @@ serve(async (req) => {
       });
     }
 
-    // Get searcher data
+    // ── Location preference filtering ──
+    // If user specified a preferred country/city, filter candidates accordingly
+    let locationFiltered = candidates;
+    if (prefCountry || prefCity) {
+      const normalizeLC = (s: string | null) => (s || "").toLowerCase().trim();
+      const pCountry = normalizeLC(prefCountry);
+      const pCity = normalizeLC(prefCity);
+
+      locationFiltered = candidates.filter((c: any) => {
+        const cCountry = normalizeLC(c.location_country);
+        const cCity = normalizeLC(c.location_city);
+
+        // If country specified, must match
+        if (pCountry && cCountry !== pCountry) return false;
+        // If city specified, must match (substring for flexibility)
+        if (pCity && !cCity.includes(pCity) && !pCity.includes(cCity)) return false;
+        return true;
+      });
+
+      // If no candidates after strict filtering, fall back to same-country matches
+      if (locationFiltered.length === 0 && pCountry && pCity) {
+        locationFiltered = candidates.filter((c: any) => normalizeLC(c.location_country) === pCountry);
+      }
+    }
+
+    // Use location-filtered candidates going forward, but keep original for fallback
+    const workingCandidates = locationFiltered.length > 0 ? locationFiltered : candidates;
+    const workingCandidateIds = workingCandidates.map((c: any) => c.user_id);
+
     const { data: searcherProfile } = await supabase.from("profiles").select("*").eq("user_id", userId).single();
     const { data: searcherPersonality } = await supabase.from("personality").select("*").eq("user_id", userId).single();
     const { data: searcherIkigai } = await supabase.from("ikigai").select("*").eq("user_id", userId).single();
 
     // Fetch candidate details
-    const { data: candidateIdentities } = await supabase.from("user_identity").select("*").in("user_id", candidateIds);
-    const { data: candidatePersonalities } = await supabase.from("personality").select("*").in("user_id", candidateIds);
-    const { data: candidateIkigais } = await supabase.from("ikigai").select("*").in("user_id", candidateIds);
+    const { data: candidateIdentities } = await supabase.from("user_identity").select("*").in("user_id", workingCandidateIds);
+    const { data: candidatePersonalities } = await supabase.from("personality").select("*").in("user_id", workingCandidateIds);
+    const { data: candidateIkigais } = await supabase.from("ikigai").select("*").in("user_id", workingCandidateIds);
 
     const candidateMap = new Map();
-    candidates.forEach(c => {
+    workingCandidates.forEach((c: any) => {
       candidateMap.set(c.user_id, {
         profile: c,
         identity: candidateIdentities?.find(i => i.user_id === c.user_id),
@@ -226,7 +254,7 @@ serve(async (req) => {
     const searcherIsFounder = searcherIdentity?.identity_type === "founder";
     const searcherSeekingCofounder = searcherIntents.includes("cofounder");
 
-    const filteredCandidates = candidates.filter(c => {
+    const filteredCandidates = workingCandidates.filter((c: any) => {
       const cIdentity = candidateIdentities?.find(i => i.user_id === c.user_id);
       if (!cIdentity) return false;
 
@@ -310,6 +338,8 @@ ${JSON.stringify(searcherJSON, null, 2)}
 
 QUERY: "${fullQuery}"
 MANDATORY TERMS: ${queryTerms.join(", ") || "(none)"}
+LOCATION PREFERENCE: ${prefCountry ? `Country: ${prefCountry}` : "Any country"}${prefCity ? `, City: ${prefCity}` : ""}
+NOTE: If candidates are in a different country than the searcher's preference, flag this as a "Medium" risk under geographic mismatch. Same country but different city is "Low" risk.
 
 CANDIDATES (Person B — potential matches):
 ${JSON.stringify(candidatesJSON, null, 2)}
@@ -460,7 +490,7 @@ OUTPUT FORMAT (JSON — must be a valid JSON object with a "matches" key):
     // Join scores with profile data
     const finalMatches = matchScores
       .map((score: any) => {
-        const candidate = candidates.find(c => c.user_id === score.user_id);
+        const candidate = workingCandidates.find((c: any) => c.user_id === score.user_id);
         if (!candidate) return null;
         
         return {
